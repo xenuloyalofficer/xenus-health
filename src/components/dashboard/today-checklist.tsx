@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { QuickAddDialog } from "@/components/forms/quick-add-dialog";
 import { 
   Activity, 
   Moon, 
@@ -12,12 +13,12 @@ import {
 } from "lucide-react";
 
 const checklistItems = [
-  { id: "sleep", label: "Sleep", icon: Moon, status: "logged", time: "7h 23m" },
-  { id: "weight", label: "Weight", icon: Activity, status: "optional", time: null },
-  { id: "meds", label: "Meds", icon: Pill, status: "pending", time: "Morning dose" },
-  { id: "exercise", label: "Exercise", icon: Dumbbell, status: "pending", time: "Treadmill 30m" },
-  { id: "food", label: "Food", icon: Utensils, status: "partial", time: "2 entries" },
-  { id: "energy", label: "Energy/Mood", icon: Zap, status: "pending", time: null },
+  { id: "sleep", label: "Sleep", icon: Moon, status: "logged", time: "7h 23m", type: "sleep" as const },
+  { id: "weight", label: "Weight", icon: Activity, status: "optional", time: null, type: "weight" as const },
+  { id: "meds", label: "Meds", icon: Pill, status: "pending", time: "Morning dose", type: "meds" as const },
+  { id: "exercise", label: "Exercise", icon: Dumbbell, status: "pending", time: "Treadmill 30m", type: "exercise" as const },
+  { id: "food", label: "Food", icon: Utensils, status: "partial", time: "2 entries", type: "food" as const },
+  { id: "energy", label: "Energy/Mood", icon: Zap, status: "pending", time: null, type: "energy" as const },
 ];
 
 export function TodayChecklist() {
@@ -58,13 +59,15 @@ export function TodayChecklist() {
                 </div>
               </div>
               
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="h-8 w-8 p-0"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+              <QuickAddDialog type={item.type} trigger={
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              } />
             </div>
           );
         })}
