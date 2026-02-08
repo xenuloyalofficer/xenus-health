@@ -422,7 +422,7 @@ export function HealthTab() {
               <Button
                 onClick={handleGoingToSleep}
                 disabled={sleepLoading}
-                className="w-full h-14 rounded-2xl text-lg font-bold bg-indigo-500 hover:bg-indigo-600 text-white shadow-[4px_4px_0px_0px_rgba(79,70,229,0.3)]"
+                className="w-full h-14 rounded-2xl text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-[4px_4px_0px_0px_rgba(223,255,0,0.4)]"
               >
                 {sleepLoading ? "Saving..." : "GOING TO SLEEP"}
               </Button>
@@ -439,7 +439,7 @@ export function HealthTab() {
               </div>
               <Button
                 onClick={handleGoodMorning}
-                className="w-full h-14 rounded-2xl text-lg font-bold bg-white text-indigo-600 hover:bg-white/90 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"
+                className="w-full h-14 rounded-2xl text-lg font-bold bg-white text-foreground hover:bg-white/90 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"
               >
                 GOOD MORNING
               </Button>
