@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { AppShell } from "@/components/layout/app-shell";
 
 export default function Home() {
-  redirect("/dashboard");
+  return <AppShell />;
 }

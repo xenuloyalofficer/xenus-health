@@ -2,14 +2,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { QuickAddDialog } from "@/components/forms/quick-add-dialog";
-import { 
-  Activity, 
-  Moon, 
-  Dumbbell, 
-  Utensils, 
-  Pill, 
+import {
+  Activity,
+  Moon,
+  Dumbbell,
+  Utensils,
+  Pill,
   Zap,
-  Plus 
+  Ruler,
+  Plus
 } from "lucide-react";
 
 const checklistItems = [
@@ -19,6 +20,7 @@ const checklistItems = [
   { id: "exercise", label: "Exercise", icon: Dumbbell, status: "pending", time: "Treadmill 30m", type: "exercise" as const },
   { id: "food", label: "Food", icon: Utensils, status: "partial", time: "2 entries", type: "food" as const },
   { id: "energy", label: "Energy/Mood", icon: Zap, status: "pending", time: null, type: "energy" as const },
+  { id: "measurements", label: "Measurements", icon: Ruler, status: "optional", time: "Weekly", type: "measurements" as const },
 ];
 
 export function TodayChecklist() {
