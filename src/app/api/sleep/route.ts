@@ -5,12 +5,11 @@ import { z } from "zod/v4"
 // --- Validation ---
 
 const sleepEntrySchema = z.object({
-  bedtime: z.iso.datetime({ message: "bedtime must be an ISO 8601 datetime" }),
-  wake_time: z.iso.datetime({ message: "wake_time must be an ISO 8601 datetime" }).optional(),
-  quality: z.int().min(1).max(5).optional(),
-  interruptions: z.int().min(0).max(99).optional(),
+  sleep_start: z.iso.datetime({ message: "sleep_start must be an ISO 8601 datetime" }),
+  sleep_end: z.iso.datetime({ message: "sleep_end must be an ISO 8601 datetime" }).optional(),
+  duration_minutes: z.number().positive().max(1440).optional(),
+  quality_rating: z.int().min(1).max(5).optional(),
   notes: z.string().max(1000).optional(),
-  sleep_date: z.iso.date().optional(),
 })
 
 const sleepUpdateSchema = sleepEntrySchema.partial().refine(
@@ -43,18 +42,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "30", 10) || 30, 1), 100)
     const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0)
-    const from = searchParams.get("from") // ISO date string
-    const to = searchParams.get("to")     // ISO date string
+    const from = searchParams.get("from")
+    const to = searchParams.get("to")
 
     let query = supabase
-      .from("sleep_entry")
+      .from("sleep_entries")
       .select("*", { count: "exact" })
       .eq("user_id", userId)
-      .order("sleep_date", { ascending: false })
+      .order("sleep_start", { ascending: false })
       .range(offset, offset + limit - 1)
 
-    if (from) query = query.gte("sleep_date", from)
-    if (to) query = query.lte("sleep_date", to)
+    if (from) query = query.gte("sleep_start", from)
+    if (to) query = query.lte("sleep_start", to)
 
     const { data, error, count } = await query
 
@@ -84,21 +83,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { bedtime, wake_time, quality, interruptions, notes, sleep_date } = parsed.data
-
-    // Default sleep_date to the bedtime's date if not provided
-    const resolvedSleepDate = sleep_date || bedtime.slice(0, 10)
+    const { sleep_start, sleep_end, duration_minutes, quality_rating, notes } = parsed.data
 
     const { data, error } = await supabase
-      .from("sleep_entry")
+      .from("sleep_entries")
       .insert({
         user_id: userId,
-        bedtime,
-        wake_time: wake_time ?? null,
-        quality: quality ?? null,
-        interruptions: interruptions ?? 0,
+        sleep_start,
+        sleep_end: sleep_end ?? null,
+        duration_minutes: duration_minutes ?? null,
+        quality_rating: quality_rating ?? null,
         notes: notes ?? null,
-        sleep_date: resolvedSleepDate,
       })
       .select()
       .single()
@@ -140,7 +135,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { data, error } = await supabase
-      .from("sleep_entry")
+      .from("sleep_entries")
       .update(parsed.data)
       .eq("id", id)
       .eq("user_id", userId)
@@ -179,7 +174,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const { error } = await supabase
-      .from("sleep_entry")
+      .from("sleep_entries")
       .delete()
       .eq("id", id)
       .eq("user_id", userId)

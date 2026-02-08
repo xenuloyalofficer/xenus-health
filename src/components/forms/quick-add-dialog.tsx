@@ -212,7 +212,7 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
       const res = await fetch("/api/sleep", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bedtime: now }),
+        body: JSON.stringify({ sleep_start: now }),
       });
 
       if (!res.ok) {
@@ -240,20 +240,6 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
     setLoading(true);
     try {
       const newCount = sleepState.interruptions + 1;
-      const res = await fetch("/api/sleep", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: sleepState.currentSleepId,
-          interruptions: newCount,
-        }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || `Failed to update (${res.status})`);
-      }
-
       updateSleepState({ interruptions: newCount });
       toast.success(`Wake-up logged (${newCount} interruption${newCount > 1 ? "s" : ""} tonight)`);
     } catch (err) {
@@ -276,8 +262,8 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: sleepState.currentSleepId,
-          wake_time: now,
-          quality: sleepQuality,
+          sleep_end: now,
+          quality_rating: sleepQuality,
         }),
       });
 
@@ -314,7 +300,7 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        date: weightDate,
+        logged_at: weightDate,
         weight_kg: parseFloat(weightKg),
       }),
     });
@@ -340,10 +326,9 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        date: exerciseDate,
+        started_at: new Date(exerciseDate + "T12:00:00").toISOString(),
         duration_minutes: durationMinutes,
-        exercise_type: exerciseType,
-        distance_km: exerciseDistance ? parseFloat(exerciseDistance) : undefined,
+        exercise_type: exerciseType.toLowerCase().replace(/\s+/g, "_"),
         calories_burned: exerciseCalories ? parseInt(exerciseCalories, 10) : undefined,
         notes: exerciseNotes || undefined,
       }),
@@ -368,9 +353,9 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        food_description: foodDescription,
+        food_name: foodDescription,
         calories: foodCalories ? parseInt(foodCalories, 10) : undefined,
-        date: foodDate,
+        logged_at: new Date(foodDate + "T12:00:00").toISOString(),
       }),
     });
 
@@ -394,9 +379,9 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         energy_level: parseInt(energyLevel, 10),
-        mood_level: moodLevel ? parseInt(moodLevel, 10) : undefined,
+        mood_level: moodLevel ? parseInt(moodLevel, 10) : 3,
         notes: energyNotes || undefined,
-        date: energyDate,
+        logged_at: new Date(energyDate + "T12:00:00").toISOString(),
       }),
     });
 
@@ -421,7 +406,7 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
       body: JSON.stringify({
         medication_name: medName,
         status: medStatus,
-        date: medDate,
+        logged_at: new Date(medDate + "T12:00:00").toISOString(),
       }),
     });
 
@@ -447,7 +432,7 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
     }
 
     const payload: Record<string, unknown> = {
-      measurement_date: measDate,
+      measured_at: measDate,
     };
     if (measNeck) payload.neck_cm = parseFloat(measNeck);
     if (measChest) payload.chest_cm = parseFloat(measChest);
@@ -797,24 +782,24 @@ export function QuickAddDialog({ type, trigger }: QuickAddDialogProps) {
             {type === "energy" && (
               <>
                 <div className="space-y-2">
-                  <Label>Energy Level (1-10)</Label>
+                  <Label>Energy Level (1-5)</Label>
                   <Input
                     type="number"
                     min="1"
-                    max="10"
-                    placeholder="7"
+                    max="5"
+                    placeholder="3"
                     value={energyLevel}
                     onChange={(e) => setEnergyLevel(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Mood (1-10, optional)</Label>
+                  <Label>Mood (1-5)</Label>
                   <Input
                     type="number"
                     min="1"
-                    max="10"
-                    placeholder="8"
+                    max="5"
+                    placeholder="3"
                     value={moodLevel}
                     onChange={(e) => setMoodLevel(e.target.value)}
                   />

@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Home, Dumbbell, Scale, Heart } from "lucide-react";
+import { Home, Dumbbell, Scale, Heart, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HomeTab } from "@/components/tabs/home-tab";
 import { ExerciseTab } from "@/components/tabs/exercise-tab";
 import { BodyTab } from "@/components/tabs/body-tab";
 import { HealthTab } from "@/components/tabs/health-tab";
+import { TrendsTab } from "@/components/tabs/trends-tab";
 
 const tabs = [
   { id: "home", label: "Home", icon: Home },
   { id: "exercise", label: "Exercise", icon: Dumbbell },
   { id: "body", label: "Body", icon: Scale },
   { id: "health", label: "Health", icon: Heart },
+  { id: "trends", label: "Trends", icon: TrendingUp },
 ] as const;
 
 export type TabId = (typeof tabs)[number]["id"];
@@ -65,6 +67,9 @@ export function AppShell() {
           </div>
           <div className={activeTab === "health" ? "" : "hidden"}>
             <HealthTab />
+          </div>
+          <div className={activeTab === "trends" ? "" : "hidden"}>
+            <TrendsTab />
           </div>
         </div>
       </main>

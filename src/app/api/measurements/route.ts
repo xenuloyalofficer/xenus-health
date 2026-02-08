@@ -4,8 +4,8 @@ import { z } from "zod/v4"
 
 // --- Validation ---
 
-const measurementEntrySchema = z.object({
-  measurement_date: z.iso.date({ message: "measurement_date must be an ISO 8601 date (YYYY-MM-DD)" }),
+const measurementSchema = z.object({
+  measured_at: z.iso.date({ message: "measured_at must be an ISO 8601 date (YYYY-MM-DD)" }),
   neck_cm: z.number().positive().max(200).optional(),
   chest_cm: z.number().positive().max(300).optional(),
   left_arm_cm: z.number().positive().max(200).optional(),
@@ -32,6 +32,34 @@ async function getAuthUserId(supabase: Awaited<ReturnType<typeof createClientSer
   return user.id
 }
 
+// --- GET: List body measurements ---
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClientServer()
+    const userId = await getAuthUserId(supabase)
+    if (!userId) return errorResponse("Unauthorized", 401)
+
+    const { searchParams } = request.nextUrl
+    const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "30", 10) || 30, 1), 100)
+    const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10) || 0, 0)
+
+    const { data, error, count } = await supabase
+      .from("body_measurements")
+      .select("*", { count: "exact" })
+      .eq("user_id", userId)
+      .order("measured_at", { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (error) throw error
+
+    return NextResponse.json({ data, count })
+  } catch (error) {
+    console.error("[GET /api/measurements]", error)
+    return errorResponse("Failed to fetch body measurements", 500)
+  }
+}
+
 // --- POST: Create a body measurement entry ---
 
 export async function POST(request: NextRequest) {
@@ -41,7 +69,7 @@ export async function POST(request: NextRequest) {
     if (!userId) return errorResponse("Unauthorized", 401)
 
     const body = await request.json()
-    const parsed = measurementEntrySchema.safeParse(body)
+    const parsed = measurementSchema.safeParse(body)
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Validation failed", issues: parsed.error.issues },
@@ -50,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     const {
-      measurement_date,
+      measured_at,
       neck_cm, chest_cm,
       left_arm_cm, right_arm_cm,
       waist_cm, hips_cm,
@@ -60,10 +88,10 @@ export async function POST(request: NextRequest) {
     } = parsed.data
 
     const { data, error } = await supabase
-      .from("body_measurement_entry")
+      .from("body_measurements")
       .insert({
         user_id: userId,
-        measurement_date,
+        measured_at,
         neck_cm: neck_cm ?? null,
         chest_cm: chest_cm ?? null,
         left_arm_cm: left_arm_cm ?? null,
@@ -85,6 +113,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data }, { status: 201 })
   } catch (error) {
     console.error("[POST /api/measurements]", error)
-    return errorResponse("Failed to create body measurement entry", 500)
+    return errorResponse("Failed to create body measurement", 500)
   }
 }

@@ -1,13 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Scale, Ruler } from "lucide-react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { medium } from "@/lib/haptics";
+
+interface WeightEntry {
+  weight_kg: number;
+  logged_at: string;
+}
+
+interface MeasurementEntry {
+  measured_at: string;
+  neck_cm?: number | null;
+  chest_cm?: number | null;
+  waist_cm?: number | null;
+  hips_cm?: number | null;
+  left_arm_cm?: number | null;
+  right_arm_cm?: number | null;
+  left_thigh_cm?: number | null;
+  right_thigh_cm?: number | null;
+  left_calf_cm?: number | null;
+  right_calf_cm?: number | null;
+  weight_kg?: number | null;
+}
+
+function formatDateShort(dateStr: string) {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 
 export function BodyTab() {
   // Weight form
@@ -16,6 +44,44 @@ export function BodyTab() {
     new Date().toISOString().slice(0, 10)
   );
   const [weightLoading, setWeightLoading] = useState(false);
+
+  // Weight history for chart
+  const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
+  const [weightHistoryLoading, setWeightHistoryLoading] = useState(true);
+
+  // Measurement history
+  const [measHistory, setMeasHistory] = useState<MeasurementEntry[]>([]);
+  const [measHistoryLoading, setMeasHistoryLoading] = useState(true);
+
+  // Load weight history
+  useEffect(() => {
+    async function loadWeight() {
+      try {
+        const res = await fetch("/api/trends?type=weight&days=30");
+        if (res.ok) {
+          const { data } = await res.json();
+          setWeightHistory(data.weight || []);
+        }
+      } catch {}
+      setWeightHistoryLoading(false);
+    }
+    loadWeight();
+  }, []);
+
+  // Load measurement history
+  useEffect(() => {
+    async function loadMeas() {
+      try {
+        const res = await fetch("/api/measurements");
+        if (res.ok) {
+          const { data } = await res.json();
+          setMeasHistory((data || []).slice(0, 5));
+        }
+      } catch {}
+      setMeasHistoryLoading(false);
+    }
+    loadMeas();
+  }, []);
 
   // Measurements form
   const [measDate, setMeasDate] = useState(
@@ -47,7 +113,7 @@ export function BodyTab() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: weightDate,
+          logged_at: weightDate,
           weight_kg: parseFloat(weightKg),
         }),
       });
@@ -56,6 +122,9 @@ export function BodyTab() {
         throw new Error(body?.error || `Failed to save (${res.status})`);
       }
       toast.success("Weight saved");
+      medium();
+      // Refresh chart
+      setWeightHistory((prev) => [...prev, { weight_kg: parseFloat(weightKg), logged_at: weightDate }]);
       setWeightKg("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
@@ -80,7 +149,7 @@ export function BodyTab() {
     setMeasLoading(true);
     try {
       const payload: Record<string, unknown> = {
-        measurement_date: measDate,
+        measured_at: measDate,
       };
       if (measNeck) payload.neck_cm = parseFloat(measNeck);
       if (measChest) payload.chest_cm = parseFloat(measChest);
@@ -105,6 +174,7 @@ export function BodyTab() {
         throw new Error(body?.error || `Failed to save (${res.status})`);
       }
       toast.success("Body measurements saved");
+      medium();
       // Reset
       setMeasNeck(""); setMeasChest(""); setMeasLeftArm(""); setMeasRightArm("");
       setMeasWaist(""); setMeasHips(""); setMeasLeftThigh(""); setMeasRightThigh("");
@@ -154,10 +224,44 @@ export function BodyTab() {
             </Button>
           </form>
 
-          {/* Trend placeholder */}
+          {/* Weight trend chart */}
           <div>
-            <p className="text-sm text-muted-foreground mb-2">7-day trend</p>
-            <Skeleton className="h-32 w-full" />
+            <p className="text-sm text-muted-foreground mb-2">30-day trend</p>
+            {weightHistoryLoading ? (
+              <div className="h-32 w-full bg-muted/50 rounded animate-pulse" />
+            ) : weightHistory.length >= 2 ? (
+              <ResponsiveContainer width="100%" height={140}>
+                <LineChart data={weightHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="logged_at"
+                    tickFormatter={formatDateShort}
+                    tick={{ fontSize: 10 }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    domain={["dataMin - 0.5", "dataMax + 0.5"]}
+                    tick={{ fontSize: 10 }}
+                    width={35}
+                  />
+                  <Tooltip
+                    formatter={(value) => [`${value} kg`, "Weight"]}
+                    labelFormatter={(label) => formatDateShort(String(label))}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="weight_kg"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-6 text-muted-foreground">
+                <p className="text-sm">Log at least 2 weights to see your trend chart.</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -245,10 +349,37 @@ export function BodyTab() {
             </Button>
           </form>
 
-          {/* History placeholder */}
+          {/* Measurement history */}
           <div className="mt-4">
-            <p className="text-sm text-muted-foreground mb-2">Measurement history</p>
-            <Skeleton className="h-24 w-full" />
+            <p className="text-sm text-muted-foreground mb-2">Recent measurements</p>
+            {measHistoryLoading ? (
+              <div className="h-24 w-full bg-muted/50 rounded animate-pulse" />
+            ) : measHistory.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <p className="text-sm">No measurements logged yet. Fill in the form above to start tracking.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {measHistory.map((m, i) => {
+                  const parts: string[] = [];
+                  if (m.waist_cm) parts.push(`Waist: ${m.waist_cm}cm`);
+                  if (m.chest_cm) parts.push(`Chest: ${m.chest_cm}cm`);
+                  if (m.hips_cm) parts.push(`Hips: ${m.hips_cm}cm`);
+                  if (m.weight_kg) parts.push(`Weight: ${m.weight_kg}kg`);
+                  if (parts.length === 0) {
+                    if (m.neck_cm) parts.push(`Neck: ${m.neck_cm}cm`);
+                    if (m.left_arm_cm) parts.push(`L.Arm: ${m.left_arm_cm}cm`);
+                    if (m.right_arm_cm) parts.push(`R.Arm: ${m.right_arm_cm}cm`);
+                  }
+                  return (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-md bg-muted/30 text-sm">
+                      <span className="font-medium text-xs">{formatDateShort(m.measured_at)}</span>
+                      <span className="text-xs text-muted-foreground">{parts.join(" · ") || "Logged"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

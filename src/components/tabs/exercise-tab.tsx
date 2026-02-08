@@ -14,10 +14,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { medium } from "@/lib/haptics";
 
 const EXERCISE_TYPES = [
   { id: "treadmill", label: "Treadmill", icon: Timer, bgColor: "bg-blue-100", textColor: "text-blue-700" },
-  { id: "vibration-plate", label: "Vibration Plate", icon: Zap, bgColor: "bg-purple-100", textColor: "text-purple-700" },
+  { id: "vibration_plate", label: "Vibration Plate", icon: Zap, bgColor: "bg-purple-100", textColor: "text-purple-700" },
   { id: "walk", label: "Walk", icon: Activity, bgColor: "bg-green-100", textColor: "text-green-700" },
   { id: "run", label: "Run", icon: Activity, bgColor: "bg-orange-100", textColor: "text-orange-700" },
   { id: "strength", label: "Strength", icon: Dumbbell, bgColor: "bg-red-100", textColor: "text-red-700" },
@@ -105,6 +106,7 @@ export function ExerciseTab() {
     const timer: ActiveTimer = { exerciseType, startTime: Date.now() };
     setActiveTimer(timer);
     saveTimer(timer);
+    medium();
   }, []);
 
   const handleStop = useCallback(async () => {
@@ -118,13 +120,19 @@ export function ExerciseTab() {
 
     setLoading(true);
     try {
+      // Map display label to DB exercise_type id
+      const typeMap: Record<string, string> = {};
+      EXERCISE_TYPES.forEach((ex) => { typeMap[ex.label] = ex.id; });
+      const exerciseTypeId = typeMap[stoppedType] || stoppedType.toLowerCase().replace(/\s+/g, "_");
+
       const res = await fetch("/api/exercise", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: new Date().toISOString().slice(0, 10),
+          started_at: new Date(activeTimer.startTime).toISOString(),
+          ended_at: new Date().toISOString(),
           duration_minutes: durationMinutes,
-          exercise_type: stoppedType,
+          exercise_type: exerciseTypeId,
         }),
       });
 
@@ -143,6 +151,7 @@ export function ExerciseTab() {
         },
       ]);
       toast.success(`${stoppedType} logged: ${durationMinutes} min`);
+      medium();
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to save exercise"
@@ -162,13 +171,18 @@ export function ExerciseTab() {
     }
     setLoading(true);
     try {
+      // Map display label to DB exercise_type id
+      const typeMap: Record<string, string> = {};
+      EXERCISE_TYPES.forEach((ex) => { typeMap[ex.label] = ex.id; });
+      const exerciseTypeId = typeMap[manualType] || manualType.toLowerCase().replace(/\s+/g, "_");
+
       const res = await fetch("/api/exercise", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          date: manualDate,
+          started_at: new Date(manualDate + "T12:00:00").toISOString(),
           duration_minutes: parseInt(manualDuration, 10),
-          exercise_type: manualType,
+          exercise_type: exerciseTypeId,
           notes: manualNotes || undefined,
         }),
       });
