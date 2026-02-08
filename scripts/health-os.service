@@ -1,0 +1,16 @@
+[Unit]
+Description=Health OS - Personal Health Tracking App
+After=network.target
+
+[Service]
+Type=simple
+User=mj
+WorkingDirectory=/home/mj/projects/xenus-health/my-app
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+EnvironmentFile=/home/mj/projects/xenus-health/my-app/.env.local
+
+[Install]
+WantedBy=multi-user.target
