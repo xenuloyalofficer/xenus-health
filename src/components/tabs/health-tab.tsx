@@ -759,7 +759,7 @@ export function HealthTab() {
         {/* Energy selector */}
         <div className="mb-6">
           <p className="text-sm font-medium mb-3">Energy Level</p>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {energyOptions.map((opt) => {
               const Icon = opt.icon;
               const isSelected = energyLevel === opt.level;
@@ -768,12 +768,12 @@ export function HealthTab() {
                   key={opt.level}
                   onClick={() => setEnergyLevel(opt.level)}
                   className={cn(
-                    "flex-1 flex flex-col items-center gap-2 p-3 rounded-2xl transition-all",
+                    "flex flex-col items-center gap-1 p-2 rounded-xl transition-all min-w-0",
                     isSelected ? opt.color + " text-white shadow-lg scale-105" : "bg-secondary hover:bg-secondary/80"
                   )}
                 >
-                  <Icon className="w-6 h-6" />
-                  <span className="text-xs font-medium">{opt.label}</span>
+                  <Icon className="w-5 h-5 shrink-0" />
+                  <span className="text-[10px] font-medium leading-tight">{opt.label}</span>
                 </button>
               );
             })}
@@ -783,7 +783,7 @@ export function HealthTab() {
         {/* Mood selector */}
         <div className="mb-6">
           <p className="text-sm font-medium mb-3">Mood</p>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-5 gap-2">
             {moodOptions.map((opt) => {
               const Icon = opt.icon;
               const isSelected = moodLevel === opt.level;
@@ -792,12 +792,12 @@ export function HealthTab() {
                   key={opt.level}
                   onClick={() => setMoodLevel(opt.level)}
                   className={cn(
-                    "flex-1 flex flex-col items-center gap-2 p-3 rounded-2xl transition-all",
+                    "flex flex-col items-center gap-1 p-2 rounded-xl transition-all min-w-0",
                     isSelected ? opt.color + " text-white shadow-lg scale-105" : "bg-secondary hover:bg-secondary/80"
                   )}
                 >
-                  <Icon className="w-6 h-6" />
-                  <span className="text-xs font-medium">{opt.label}</span>
+                  <Icon className="w-5 h-5 shrink-0" />
+                  <span className="text-[10px] font-medium leading-tight">{opt.label}</span>
                 </button>
               );
             })}
