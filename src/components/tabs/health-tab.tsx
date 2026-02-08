@@ -1,19 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Moon, Pill, Utensils, Zap, Plus, Search, Check, X, BatteryLow, BatteryMedium, BatteryFull, BatteryCharging, Smile, Meh, Frown } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Moon, Pill, Utensils, Zap, Plus, Search, Check, X, Sun, Star, Coffee, Battery, Smile, Meh, Frown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CircularProgress } from "@/components/ui/circular-progress";
 import { toast } from "sonner";
 import { shouldShowSleepButton, getDefaultMealType } from "@/lib/time-awareness";
 import { medium, success } from "@/lib/haptics";
+import { cn } from "@/lib/utils";
 
-// --- Sleep tracking state (persisted in localStorage) ---
-
+// --- Sleep tracking state ---
 type SleepStatus = "none" | "sleeping" | "woke";
 
 interface SleepTrackingState {
@@ -52,8 +51,7 @@ function formatElapsedSleep(bedtime: string): string {
   return `${hours}h ${minutes}m`;
 }
 
-// --- Medication preset type ---
-
+// --- Types ---
 interface MedicationPreset {
   id: string;
   medication_name: string;
@@ -61,20 +59,13 @@ interface MedicationPreset {
   dosage: string | null;
 }
 
-// --- Food search result type ---
-
 interface FoodSearchItem {
   id?: string;
   name: string;
   default_portion_g: number | null;
   per_100g: { calories?: number | null; protein_g?: number | null };
   source?: string;
-  source_id?: string;
-  name_normalized?: string;
-  barcode?: string;
 }
-
-// --- Component ---
 
 export function HealthTab() {
   // Sleep state
@@ -102,12 +93,13 @@ export function HealthTab() {
   const [portionG, setPortionG] = useState("");
   const [mealType, setMealType] = useState<string>(getDefaultMealType());
   const [foodLoading, setFoodLoading] = useState(false);
+  const [todayCalories, setTodayCalories] = useState(0);
+  const calorieGoal = 2000;
 
   // Energy/Mood state
   const [energyLevel, setEnergyLevel] = useState<number | null>(null);
   const [moodLevel, setMoodLevel] = useState<number | null>(null);
   const [moodNotes, setMoodNotes] = useState("");
-  const [moodNotesOpen, setMoodNotesOpen] = useState(false);
   const [moodLoading, setMoodLoading] = useState(false);
 
   // Load sleep state on mount
@@ -130,6 +122,22 @@ export function HealthTab() {
     loadPresets();
   }, []);
 
+  // Load today's calories
+  useEffect(() => {
+    async function loadCalories() {
+      try {
+        const res = await fetch("/api/daily-summary");
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data?.food?.totals?.calories) {
+            setTodayCalories(Math.round(data.food.totals.calories));
+          }
+        }
+      } catch {}
+    }
+    loadCalories();
+  }, []);
+
   const updateSleepState = useCallback((update: Partial<SleepTrackingState>) => {
     setSleepState((prev) => {
       const next = { ...prev, ...update };
@@ -139,7 +147,6 @@ export function HealthTab() {
   }, []);
 
   // --- Sleep handlers ---
-
   const handleGoingToSleep = async () => {
     setSleepLoading(true);
     try {
@@ -202,7 +209,6 @@ export function HealthTab() {
   };
 
   // --- Meds handlers ---
-
   const handleLogMed = async (preset: MedicationPreset, status: "taken" | "skipped") => {
     setMedLoading(true);
     try {
@@ -255,7 +261,6 @@ export function HealthTab() {
   };
 
   // --- Food handlers ---
-
   useEffect(() => {
     if (foodQuery.length < 2) {
       setFoodResults(null);
@@ -279,7 +284,6 @@ export function HealthTab() {
     setSelectedFood(item);
     setPortionG(String(item.default_portion_g || 100));
 
-    // If from external source, save to catalog first
     if (!item.id && (item.source === "usda" || item.source === "openfoodfacts")) {
       try {
         const res = await fetch("/api/nutrition/save", {
@@ -309,6 +313,12 @@ export function HealthTab() {
         }),
       });
       if (!res.ok) throw new Error("Failed to log food");
+      
+      const calories = selectedFood.per_100g?.calories 
+        ? Math.round(selectedFood.per_100g.calories * parseFloat(portionG) / 100)
+        : 0;
+      setTodayCalories(prev => prev + calories);
+      
       toast.success(`${selectedFood.name} logged`);
       medium();
       setSelectedFood(null);
@@ -321,8 +331,7 @@ export function HealthTab() {
     }
   };
 
-  // --- Energy/Mood handler ---
-
+  // --- Mood handler ---
   const handleMoodSubmit = async () => {
     if (energyLevel === null || moodLevel === null) {
       toast.error("Please select both energy and mood levels");
@@ -346,7 +355,6 @@ export function HealthTab() {
       setEnergyLevel(null);
       setMoodLevel(null);
       setMoodNotes("");
-      setMoodNotesOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
     } finally {
@@ -354,472 +362,466 @@ export function HealthTab() {
     }
   };
 
-  // --- Sleep quality labels ---
   const qualityLabels = ["Awful", "Poor", "OK", "Good", "Great"];
+  const starLabels = ["☆", "☆", "☆", "☆", "☆"];
 
-  // --- Energy icons/labels ---
   const energyOptions = [
-    { level: 1, icon: BatteryLow, label: "Exhausted", color: "text-red-500 bg-red-50 border-red-200" },
-    { level: 2, icon: BatteryLow, label: "Low", color: "text-orange-500 bg-orange-50 border-orange-200" },
-    { level: 3, icon: BatteryMedium, label: "Moderate", color: "text-yellow-500 bg-yellow-50 border-yellow-200" },
-    { level: 4, icon: BatteryFull, label: "Good", color: "text-green-500 bg-green-50 border-green-200" },
-    { level: 5, icon: BatteryCharging, label: "Energized", color: "text-emerald-500 bg-emerald-50 border-emerald-200" },
+    { level: 1, icon: Battery, label: "Exhausted", color: "bg-red-500" },
+    { level: 2, icon: Battery, label: "Low", color: "bg-orange-500" },
+    { level: 3, icon: Battery, label: "Moderate", color: "bg-yellow-500" },
+    { level: 4, icon: Battery, label: "Good", color: "bg-green-500" },
+    { level: 5, icon: Zap, label: "Energized", color: "bg-primary" },
   ];
 
   const moodOptions = [
-    { level: 1, icon: Frown, label: "Awful", color: "text-red-500 bg-red-50 border-red-200" },
-    { level: 2, icon: Frown, label: "Not great", color: "text-orange-500 bg-orange-50 border-orange-200" },
-    { level: 3, icon: Meh, label: "Okay", color: "text-yellow-500 bg-yellow-50 border-yellow-200" },
-    { level: 4, icon: Smile, label: "Good", color: "text-green-500 bg-green-50 border-green-200" },
-    { level: 5, icon: Smile, label: "Great", color: "text-emerald-500 bg-emerald-50 border-emerald-200" },
+    { level: 1, icon: Frown, label: "Awful", color: "bg-red-500" },
+    { level: 2, icon: Frown, label: "Not great", color: "bg-orange-500" },
+    { level: 3, icon: Meh, label: "Okay", color: "bg-yellow-500" },
+    { level: 4, icon: Smile, label: "Good", color: "bg-green-500" },
+    { level: 5, icon: Smile, label: "Great", color: "bg-primary" },
   ];
 
   const showSleep = shouldShowSleepButton() || sleepState.sleepStatus !== "none";
+  const medProgress = medPresets.length > 0 
+    ? Math.round((Object.keys(todayMeds).length / medPresets.length) * 100)
+    : 0;
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Health</h2>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Health</h1>
+      </div>
 
       {/* Sleep Card */}
       {showSleep && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Moon className="h-5 w-5" />
-                Sleep
-              </CardTitle>
-              {sleepState.sleepStatus !== "none" && (
-                <Badge variant="secondary" className="text-xs">
-                  {sleepState.sleepStatus === "sleeping" ? "Sleeping" : "Rate quality"}
-                </Badge>
+        <div className={cn(
+          "rounded-3xl border-2 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.1)] transition-all",
+          sleepState.sleepStatus === "sleeping" ? "bg-indigo-500 border-indigo-600 text-white" : "bg-card border-foreground/5"
+        )}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center",
+              sleepState.sleepStatus === "sleeping" ? "bg-white/20" : "bg-indigo-100 text-indigo-600"
+            )}>
+              <Moon className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="font-bold text-lg">Sleep</h2>
+              {sleepState.sleepStatus === "sleeping" && (
+                <p className="text-white/80 text-sm">Sleeping now</p>
               )}
             </div>
-          </CardHeader>
-          <CardContent>
-            {sleepState.sleepStatus === "none" && (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Tap when you&apos;re heading to bed. We&apos;ll track the time.
-                </p>
-                <Button
-                  type="button"
-                  className="w-full h-14 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 text-white"
-                  disabled={sleepLoading}
-                  onClick={handleGoingToSleep}
-                >
-                  {sleepLoading ? "Saving..." : "GOING TO SLEEP NOW"}
-                </Button>
-              </div>
-            )}
-
-            {sleepState.sleepStatus === "sleeping" && (
-              <div className="space-y-3">
-                <div className="text-center space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    In bed since {sleepState.bedtime ? formatTime(sleepState.bedtime) : "..."}
-                  </p>
-                  {sleepState.bedtime && (
-                    <p className="text-2xl font-mono font-bold">
-                      {formatElapsedSleep(sleepState.bedtime)}
-                    </p>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  className="w-full h-14 text-lg font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-                  disabled={sleepLoading}
-                  onClick={handleGoodMorning}
-                >
-                  GOOD MORNING
-                </Button>
-              </div>
-            )}
-
-            {sleepState.sleepStatus === "woke" && (
-              <div className="space-y-4">
-                <div className="text-center space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    Slept for {sleepState.bedtime ? formatElapsedSleep(sleepState.bedtime) : "..."}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <Label className="text-center block">How did you sleep?</Label>
-                  <div className="flex gap-2 justify-center">
-                    {[1, 2, 3, 4, 5].map((val) => (
-                      <Button
-                        key={val}
-                        type="button"
-                        variant={sleepQuality === val ? "default" : "outline"}
-                        className={`h-12 w-12 text-lg font-bold ${
-                          sleepQuality === val ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""
-                        }`}
-                        onClick={() => setSleepQuality(val)}
-                      >
-                        {val}
-                      </Button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground text-center">
-                    {qualityLabels[sleepQuality - 1]}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  className="w-full h-12 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
-                  disabled={sleepLoading}
-                  onClick={handleSaveMorning}
-                >
-                  {sleepLoading ? "Saving..." : "Complete Sleep Log"}
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Medications Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Pill className="h-5 w-5" />
-              Medications
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setAddMedOpen(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add
-            </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {medPresetsLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          ) : medPresets.length === 0 ? (
-            <div className="text-center py-6 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Add your medications once, then log them daily with a tap.
+
+          {sleepState.sleepStatus === "none" && (
+            <div className="space-y-4">
+              <p className="text-muted-foreground">
+                Tap when you&apos;re heading to bed. We&apos;ll track the time.
               </p>
-              <Button variant="outline" onClick={() => setAddMedOpen(true)}>
-                <Plus className="h-4 w-4 mr-1" /> Set Up Medications
+              <Button
+                onClick={handleGoingToSleep}
+                disabled={sleepLoading}
+                className="w-full h-14 rounded-2xl text-lg font-bold bg-indigo-500 hover:bg-indigo-600 text-white shadow-[4px_4px_0px_0px_rgba(79,70,229,0.3)]"
+              >
+                {sleepLoading ? "Saving..." : "GOING TO SLEEP"}
               </Button>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {medPresets.map((preset) => {
-                const status = todayMeds[preset.id];
-                return (
-                  <div
-                    key={preset.id}
-                    className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                      status === "taken" ? "bg-green-50" : status === "skipped" ? "bg-gray-50" : "bg-muted/50"
-                    }`}
-                  >
-                    <div>
-                      <p className={`font-medium text-sm ${status === "taken" ? "text-green-700" : status === "skipped" ? "text-gray-500 line-through" : ""}`}>
-                        {preset.medication_name}
-                      </p>
-                      {preset.dosage && (
-                        <p className="text-xs text-muted-foreground">{preset.dosage}</p>
-                      )}
-                    </div>
-                    {!status ? (
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 px-3 text-green-700 border-green-200 hover:bg-green-50"
-                          onClick={() => handleLogMed(preset, "taken")}
-                          disabled={medLoading}
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 px-3 text-gray-500 border-gray-200 hover:bg-gray-50"
-                          onClick={() => handleLogMed(preset, "skipped")}
-                          disabled={medLoading}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <Badge variant={status === "taken" ? "default" : "secondary"} className="text-xs">
-                        {status}
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
-              <p className="text-xs text-muted-foreground text-center pt-1">
-                {Object.keys(todayMeds).length}/{medPresets.length} logged
-              </p>
+          )}
+
+          {sleepState.sleepStatus === "sleeping" && (
+            <div className="space-y-4">
+              <div className="text-center py-4">
+                <p className="text-white/80 text-sm mb-1">In bed since {sleepState.bedtime ? formatTime(sleepState.bedtime) : "..."}</p>
+                {sleepState.bedtime && (
+                  <p className="text-5xl font-bold tabular-nums">{formatElapsedSleep(sleepState.bedtime)}</p>
+                )}
+              </div>
+              <Button
+                onClick={handleGoodMorning}
+                className="w-full h-14 rounded-2xl text-lg font-bold bg-white text-indigo-600 hover:bg-white/90 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"
+              >
+                GOOD MORNING
+              </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+
+          {sleepState.sleepStatus === "woke" && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-muted-foreground text-sm">Slept for {sleepState.bedtime ? formatElapsedSleep(sleepState.bedtime) : "..."}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-3 text-center">How did you sleep?</p>
+                <div className="flex gap-2 justify-center">
+                  {[1, 2, 3, 4, 5].map((val) => (
+                    <button
+                      key={val}
+                      onClick={() => setSleepQuality(val)}
+                      className={cn(
+                        "w-12 h-12 rounded-xl text-xl transition-all",
+                        sleepQuality === val 
+                          ? "bg-primary text-primary-foreground shadow-lg scale-110" 
+                          : "bg-secondary hover:bg-secondary/80"
+                      )}
+                    >
+                      {val >= sleepQuality ? "★" : "☆"}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground text-center mt-2">{qualityLabels[sleepQuality - 1]}</p>
+              </div>
+              <Button
+                onClick={handleSaveMorning}
+                disabled={sleepLoading}
+                className="w-full h-12 rounded-xl font-bold"
+              >
+                {sleepLoading ? "Saving..." : "Complete Sleep Log"}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Food / Calories Card */}
+      <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center">
+              <Utensils className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="font-bold text-lg">Nutrition</h2>
+              <p className="text-sm text-muted-foreground">{todayCalories} / {calorieGoal} cal</p>
+            </div>
+          </div>
+          <div className="relative">
+            <CircularProgress 
+              value={(todayCalories / calorieGoal) * 100} 
+              size={70} 
+              strokeWidth={8}
+              color="#f97316"
+            >
+              <span className="text-xs font-bold">{Math.round((todayCalories / calorieGoal) * 100)}%</span>
+            </CircularProgress>
+          </div>
+        </div>
+
+        {/* Food Search */}
+        <div className="relative mb-3">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Input
+            className="pl-12 h-14 rounded-xl text-base"
+            placeholder="Search foods..."
+            value={foodQuery}
+            onChange={(e) => setFoodQuery(e.target.value)}
+          />
+        </div>
+
+        {foodSearching && <p className="text-sm text-muted-foreground">Searching...</p>}
+
+        {/* Search Results */}
+        {foodResults && !selectedFood && (
+          <div className="max-h-48 overflow-y-auto space-y-1 -mx-2 px-2">
+            {foodResults.personal.length > 0 && (
+              <>
+                <p className="text-xs font-bold text-muted-foreground uppercase mt-2 mb-1">Your Foods</p>
+                {foodResults.personal.map((item, i) => (
+                  <button
+                    key={`p-${i}`}
+                    className="w-full text-left p-3 rounded-xl hover:bg-secondary transition-colors flex justify-between items-center"
+                    onClick={() => handleSelectFood(item)}
+                  >
+                    <span className="font-medium">{item.name}</span>
+                    <span className="text-muted-foreground text-sm">{item.per_100g?.calories ?? "?"} cal/100g</span>
+                  </button>
+                ))}
+              </>
+            )}
+            {foodResults.usda.length > 0 && (
+              <>
+                <p className="text-xs font-bold text-muted-foreground uppercase mt-2 mb-1">USDA Database</p>
+                {foodResults.usda.map((item, i) => (
+                  <button
+                    key={`u-${i}`}
+                    className="w-full text-left p-3 rounded-xl hover:bg-secondary transition-colors flex justify-between items-center"
+                    onClick={() => handleSelectFood(item)}
+                  >
+                    <span className="font-medium">{item.name}</span>
+                    <span className="text-muted-foreground text-sm">{item.per_100g?.calories ?? "?"} cal/100g</span>
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Selected Food */}
+        {selectedFood && (
+          <div className="mt-3 bg-secondary/50 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-bold">{selectedFood.name}</p>
+              <button onClick={() => setSelectedFood(null)} className="p-1 rounded-lg hover:bg-secondary">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Label className="text-xs">Portion (g)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={portionG}
+                  onChange={(e) => setPortionG(e.target.value)}
+                  className="h-12 rounded-xl mt-1"
+                />
+              </div>
+              <div className="flex gap-1 pt-6">
+                <Button variant="outline" size="sm" onClick={() => setPortionG("100")} className="rounded-lg">100g</Button>
+                <Button variant="outline" size="sm" onClick={() => setPortionG("200")} className="rounded-lg">200g</Button>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Meal</Label>
+              <div className="flex gap-2 mt-1">
+                {["breakfast", "lunch", "dinner", "snack"].map((mt) => (
+                  <button
+                    key={mt}
+                    onClick={() => setMealType(mt)}
+                    className={cn(
+                      "flex-1 py-2 rounded-xl text-sm font-medium capitalize transition-colors",
+                      mealType === mt ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80"
+                    )}
+                  >
+                    {mt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {portionG && selectedFood.per_100g?.calories != null && (
+              <p className="text-center font-bold text-lg">
+                = {Math.round(selectedFood.per_100g.calories * parseFloat(portionG) / 100)} calories
+              </p>
+            )}
+
+            <Button onClick={handleLogFood} disabled={foodLoading} className="w-full h-12 rounded-xl font-bold">
+              {foodLoading ? "Saving..." : "Log Food"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Medications Card */}
+      <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-red-500 flex items-center justify-center">
+              <Pill className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="font-bold text-lg">Medications</h2>
+              <p className="text-sm text-muted-foreground">{Object.keys(todayMeds).length}/{medPresets.length} taken</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setAddMedOpen(true)} className="rounded-full">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Progress bar */}
+        {medPresets.length > 0 && (
+          <div className="h-2 bg-secondary rounded-full mb-4 overflow-hidden">
+            <div className="h-full bg-red-500 rounded-full transition-all" style={{ width: `${medProgress}%` }} />
+          </div>
+        )}
+
+        {medPresetsLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : medPresets.length === 0 ? (
+          <div className="text-center py-6 space-y-3">
+            <p className="text-muted-foreground">Add your medications to track them daily.</p>
+            <Button onClick={() => setAddMedOpen(true)} variant="outline" className="rounded-full">
+              <Plus className="h-4 w-4 mr-1" /> Add Medication
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {medPresets.map((preset) => {
+              const status = todayMeds[preset.id];
+              return (
+                <div
+                  key={preset.id}
+                  className={cn(
+                    "flex items-center justify-between p-4 rounded-2xl transition-all",
+                    status === "taken" ? "bg-green-100 border-2 border-green-200" : 
+                    status === "skipped" ? "bg-gray-100 border-2 border-gray-200 opacity-60" : 
+                    "bg-secondary/50 border-2 border-transparent"
+                  )}
+                >
+                  <div>
+                    <p className={cn("font-semibold", status === "taken" && "text-green-800", status === "skipped" && "text-gray-500 line-through")}>
+                      {preset.medication_name}
+                    </p>
+                    {preset.dosage && (
+                      <p className="text-xs text-muted-foreground">{preset.dosage}</p>
+                    )}
+                  </div>
+                  {!status ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleLogMed(preset, "taken")}
+                        disabled={medLoading}
+                        className="w-10 h-10 rounded-xl bg-green-500 text-white flex items-center justify-center hover:bg-green-600 transition-colors"
+                      >
+                        <Check className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleLogMed(preset, "skipped")}
+                        disabled={medLoading}
+                        className="w-10 h-10 rounded-xl bg-gray-400 text-white flex items-center justify-center hover:bg-gray-500 transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-bold",
+                      status === "taken" ? "bg-green-500 text-white" : "bg-gray-400 text-white"
+                    )}>
+                      {status}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Add Medication Dialog */}
       <Dialog open={addMedOpen} onOpenChange={setAddMedOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] rounded-3xl border-2">
           <DialogHeader>
-            <DialogTitle>Add Medication</DialogTitle>
+            <DialogTitle className="text-xl font-bold">Add Medication</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label>Medication Name</Label>
-              <Input placeholder="e.g., Vitamin D" value={newMedName} onChange={(e) => setNewMedName(e.target.value)} />
+            <div>
+              <Label className="font-medium">Medication Name</Label>
+              <Input placeholder="e.g., Vitamin D" value={newMedName} onChange={(e) => setNewMedName(e.target.value)} className="h-12 rounded-xl mt-1.5" />
             </div>
-            <div className="space-y-2">
-              <Label>Dosage (optional)</Label>
-              <Input placeholder="e.g., 500mg" value={newMedDosage} onChange={(e) => setNewMedDosage(e.target.value)} />
+            <div>
+              <Label className="font-medium">Dosage (optional)</Label>
+              <Input placeholder="e.g., 500mg" value={newMedDosage} onChange={(e) => setNewMedDosage(e.target.value)} className="h-12 rounded-xl mt-1.5" />
             </div>
-            <div className="space-y-2">
-              <Label>Schedule</Label>
-              <div className="flex gap-2 flex-wrap">
+            <div>
+              <Label className="font-medium">Schedule</Label>
+              <div className="flex gap-2 flex-wrap mt-1.5">
                 {["morning", "afternoon", "evening", "night"].map((time) => (
-                  <Button
+                  <button
                     key={time}
-                    type="button"
-                    size="sm"
-                    variant={newMedSchedule.includes(time) ? "default" : "outline"}
                     onClick={() => {
                       setNewMedSchedule((prev) =>
                         prev.includes(time) ? prev.filter((t) => t !== time) : [...prev, time]
                       );
                     }}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-sm font-medium capitalize transition-colors",
+                      newMedSchedule.includes(time) ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80"
+                    )}
                   >
                     {time}
-                  </Button>
+                  </button>
                 ))}
               </div>
             </div>
-            <Button className="w-full" onClick={handleAddPreset} disabled={medLoading || !newMedName}>
+            <Button onClick={handleAddPreset} disabled={medLoading || !newMedName} className="w-full h-12 rounded-xl">
               {medLoading ? "Saving..." : "Add Medication"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Food Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Utensils className="h-5 w-5" />
-            Food
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search foods..."
-              value={foodQuery}
-              onChange={(e) => setFoodQuery(e.target.value)}
-            />
+      {/* Energy / Mood Card */}
+      <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 rounded-2xl bg-yellow-500 flex items-center justify-center">
+            <Zap className="w-6 h-6 text-white" />
           </div>
-
-          {/* Search Results */}
-          {foodSearching && <p className="text-xs text-muted-foreground">Searching...</p>}
-
-          {foodResults && !selectedFood && (
-            <div className="max-h-60 overflow-y-auto space-y-1">
-              {foodResults.personal.length > 0 && (
-                <>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Your Foods</p>
-                  {foodResults.personal.map((item, i) => (
-                    <button
-                      key={`p-${i}`}
-                      className="w-full text-left p-2 rounded-md hover:bg-muted text-sm flex justify-between"
-                      onClick={() => handleSelectFood(item)}
-                    >
-                      <span>{item.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {item.per_100g?.calories ?? "?"} cal/100g
-                      </span>
-                    </button>
-                  ))}
-                </>
-              )}
-              {foodResults.usda.length > 0 && (
-                <>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase mt-2">USDA Database</p>
-                  {foodResults.usda.map((item, i) => (
-                    <button
-                      key={`u-${i}`}
-                      className="w-full text-left p-2 rounded-md hover:bg-muted text-sm flex justify-between"
-                      onClick={() => handleSelectFood(item)}
-                    >
-                      <span>{item.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {item.per_100g?.calories ?? "?"} cal/100g
-                      </span>
-                    </button>
-                  ))}
-                </>
-              )}
-              {foodResults.openfoodfacts.length > 0 && (
-                <>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase mt-2">Open Food Facts</p>
-                  {foodResults.openfoodfacts.map((item, i) => (
-                    <button
-                      key={`o-${i}`}
-                      className="w-full text-left p-2 rounded-md hover:bg-muted text-sm flex justify-between"
-                      onClick={() => handleSelectFood(item)}
-                    >
-                      <span>{item.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {item.per_100g?.calories ?? "?"} cal/100g
-                      </span>
-                    </button>
-                  ))}
-                </>
-              )}
-              {foodResults.personal.length === 0 && foodResults.usda.length === 0 && foodResults.openfoodfacts.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-3">No results found</p>
-              )}
-            </div>
-          )}
-
-          {/* Selected Food - Log Panel */}
-          {selectedFood && (
-            <div className="border rounded-lg p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-sm">{selectedFood.name}</p>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedFood(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Per 100g: {selectedFood.per_100g?.calories ?? "?"} cal, {selectedFood.per_100g?.protein_g ?? "?"}g protein
-              </div>
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">Portion (g)</Label>
-                  <div className="flex gap-1">
-                    <Input
-                      type="number"
-                      min="1"
-                      value={portionG}
-                      onChange={(e) => setPortionG(e.target.value)}
-                    />
-                    <Button variant="outline" size="sm" onClick={() => setPortionG("100")}>100g</Button>
-                    <Button variant="outline" size="sm" onClick={() => setPortionG("200")}>200g</Button>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Meal</Label>
-                <div className="flex gap-1">
-                  {["breakfast", "lunch", "dinner", "snack"].map((mt) => (
-                    <Button
-                      key={mt}
-                      size="sm"
-                      variant={mealType === mt ? "default" : "outline"}
-                      onClick={() => setMealType(mt)}
-                      className="capitalize text-xs"
-                    >
-                      {mt}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              {portionG && selectedFood.per_100g?.calories != null && (
-                <p className="text-sm font-medium">
-                  = {Math.round(selectedFood.per_100g.calories * parseFloat(portionG) / 100)} calories
-                </p>
-              )}
-              <Button className="w-full" onClick={handleLogFood} disabled={foodLoading}>
-                {foodLoading ? "Saving..." : "Log Food"}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Energy/Mood Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Energy / Mood
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Energy selector */}
-          <div className="space-y-2">
-            <Label className="text-sm">How&apos;s your energy?</Label>
-            <div className="flex gap-2 justify-center">
-              {energyOptions.map((opt) => {
-                const Icon = opt.icon;
-                const isSelected = energyLevel === opt.level;
-                return (
-                  <button
-                    key={opt.level}
-                    onClick={() => setEnergyLevel(opt.level)}
-                    className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all min-w-[56px] ${
-                      isSelected ? opt.color + " border-current scale-110" : "border-transparent hover:bg-muted"
-                    }`}
-                  >
-                    <Icon className={`h-7 w-7 ${isSelected ? "" : "text-muted-foreground"}`} />
-                    <span className="text-[10px] font-medium">{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+          <div>
+            <h2 className="font-bold text-lg">Energy & Mood</h2>
+            <p className="text-sm text-muted-foreground">How are you feeling?</p>
           </div>
+        </div>
 
-          {/* Mood selector */}
-          <div className="space-y-2">
-            <Label className="text-sm">How&apos;s your mood?</Label>
-            <div className="flex gap-2 justify-center">
-              {moodOptions.map((opt) => {
-                const Icon = opt.icon;
-                const isSelected = moodLevel === opt.level;
-                return (
-                  <button
-                    key={opt.level}
-                    onClick={() => setMoodLevel(opt.level)}
-                    className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all min-w-[56px] ${
-                      isSelected ? opt.color + " border-current scale-110" : "border-transparent hover:bg-muted"
-                    }`}
-                  >
-                    <Icon className={`h-7 w-7 ${isSelected ? "" : "text-muted-foreground"}`} />
-                    <span className="text-[10px] font-medium">{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
+        {/* Energy selector */}
+        <div className="mb-6">
+          <p className="text-sm font-medium mb-3">Energy Level</p>
+          <div className="flex gap-2">
+            {energyOptions.map((opt) => {
+              const Icon = opt.icon;
+              const isSelected = energyLevel === opt.level;
+              return (
+                <button
+                  key={opt.level}
+                  onClick={() => setEnergyLevel(opt.level)}
+                  className={cn(
+                    "flex-1 flex flex-col items-center gap-2 p-3 rounded-2xl transition-all",
+                    isSelected ? opt.color + " text-white shadow-lg scale-105" : "bg-secondary hover:bg-secondary/80"
+                  )}
+                >
+                  <Icon className="w-6 h-6" />
+                  <span className="text-xs font-medium">{opt.label}</span>
+                </button>
+              );
+            })}
           </div>
+        </div>
 
-          {/* Notes toggle */}
-          {!moodNotesOpen ? (
-            <button
-              className="text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => setMoodNotesOpen(true)}
-            >
-              Add a note...
-            </button>
-          ) : (
-            <Input
-              placeholder="How are you feeling?"
-              value={moodNotes}
-              onChange={(e) => setMoodNotes(e.target.value)}
-            />
-          )}
+        {/* Mood selector */}
+        <div className="mb-6">
+          <p className="text-sm font-medium mb-3">Mood</p>
+          <div className="flex gap-2">
+            {moodOptions.map((opt) => {
+              const Icon = opt.icon;
+              const isSelected = moodLevel === opt.level;
+              return (
+                <button
+                  key={opt.level}
+                  onClick={() => setMoodLevel(opt.level)}
+                  className={cn(
+                    "flex-1 flex flex-col items-center gap-2 p-3 rounded-2xl transition-all",
+                    isSelected ? opt.color + " text-white shadow-lg scale-105" : "bg-secondary hover:bg-secondary/80"
+                  )}
+                >
+                  <Icon className="w-6 h-6" />
+                  <span className="text-xs font-medium">{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-          <Button
-            className="w-full"
-            onClick={handleMoodSubmit}
-            disabled={moodLoading || energyLevel === null || moodLevel === null}
-          >
-            {moodLoading ? "Saving..." : "Log Energy & Mood"}
-          </Button>
-        </CardContent>
-      </Card>
+        {/* Notes */}
+        <div className="mb-4">
+          <Input
+            placeholder="Add a note about how you're feeling..."
+            value={moodNotes}
+            onChange={(e) => setMoodNotes(e.target.value)}
+            className="h-12 rounded-xl"
+          />
+        </div>
+
+        <Button
+          onClick={handleMoodSubmit}
+          disabled={moodLoading || energyLevel === null || moodLevel === null}
+          className="w-full h-12 rounded-xl font-bold"
+        >
+          {moodLoading ? "Saving..." : "Log Energy & Mood"}
+        </Button>
+      </div>
     </div>
   );
 }

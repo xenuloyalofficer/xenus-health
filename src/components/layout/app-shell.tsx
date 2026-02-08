@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Home, Dumbbell, Scale, Heart, TrendingUp } from "lucide-react";
+import { Home, Dumbbell, Scale, Heart, TrendingUp, Bell, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HomeTab } from "@/components/tabs/home-tab";
 import { ExerciseTab } from "@/components/tabs/exercise-tab";
@@ -24,38 +24,46 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Desktop top nav */}
-      <header className="hidden md:block border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+      {/* Desktop header */}
+      <header className="hidden md:block sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-foreground/5">
         <div className="container mx-auto px-4 max-w-5xl">
-          <div className="flex items-center h-14">
-            <span className="font-bold text-lg mr-8">Health OS</span>
-            <nav className="flex gap-1">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                      activeTab === tab.id
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center shadow-[3px_3px_0px_0px_rgba(15,15,15,0.15)]">
+                <span className="text-xl font-bold text-primary-foreground">H</span>
+              </div>
+              <span className="font-bold text-xl tracking-tight">Health OS</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors">
+                <Bell className="w-5 h-5" />
+              </button>
+              <button className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="w-5 h-5 text-primary-foreground" />
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
+      {/* Mobile header */}
+      <header className="md:hidden sticky top-0 z-40 bg-background/80 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,15,15,0.15)]">
+              <span className="text-sm font-bold text-primary-foreground">H</span>
+            </div>
+            <span className="font-bold text-lg">Health OS</span>
+          </div>
+          <button className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+            <Bell className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
       {/* Content - all tabs rendered, inactive hidden to preserve timer state */}
-      <main className="flex-1 pb-20 md:pb-6">
-        <div className="container mx-auto px-4 py-6 max-w-5xl">
+      <main className="flex-1 pb-28 md:pb-6">
+        <div className="container mx-auto px-4 py-4 max-w-5xl">
           <div className={activeTab === "home" ? "" : "hidden"}>
             <HomeTab onNavigate={setActiveTab} />
           </div>
@@ -74,28 +82,52 @@ export function AppShell() {
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-t z-50">
-        <div className="flex justify-around items-center h-16 px-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex flex-col items-center gap-1 min-w-[64px] px-3 py-2 rounded-lg transition-colors",
-                  activeTab === tab.id
-                    ? "text-primary"
-                    : "text-muted-foreground"
-                )}
-              >
-                <Icon className={cn("h-5 w-5", activeTab === tab.id && "stroke-[2.5]")} />
-                <span className="text-xs font-medium">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+      {/* Desktop side navigation */}
+      <nav className="hidden md:flex fixed left-4 top-1/2 -translate-y-1/2 flex-col gap-2 p-3 bg-card rounded-3xl border-2 border-foreground/5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.08)] z-50">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-200",
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-[2px_2px_0px_0px_rgba(15,15,15,0.15)]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+              )}
+              title={tab.label}
+            >
+              <Icon className={cn("w-5 h-5", isActive && "stroke-[2.5]")} />
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Mobile floating bottom navigation */}
+      <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-2 bg-card/95 backdrop-blur-xl rounded-full border-2 border-foreground/5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center justify-center min-w-[52px] h-12 rounded-full transition-all duration-200",
+                isActive
+                  ? "bg-primary text-primary-foreground px-4 shadow-[2px_2px_0px_0px_rgba(15,15,15,0.15)]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className={cn("w-5 h-5", isActive && "stroke-[2.5]")} />
+              {isActive && (
+                <span className="ml-2 text-sm font-semibold">{tab.label}</span>
+              )}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
