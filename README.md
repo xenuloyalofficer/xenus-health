@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Personal Health OS
 
-## Getting Started
+A full-stack health tracking application built with Next.js, Supabase, and shadcn/ui.
 
-First, run the development server:
+## Features
+
+- **Dashboard**: Health cockpit with momentum score, today's checklist, next treadmill session
+- **Labs**: Upload and track lab reports with analyte trends
+- **Exercise**: Treadmill progression with adaptive planning
+- **Sleep & Recovery**: Sleep tracking with energy overlay
+- **Body Metrics**: Weight rolling averages and measurements
+- **Meds & Symptoms**: Medication adherence and symptom timeline
+- **Insights**: Weekly/monthly summaries with explainable scores
+
+## Stack
+
+- **Framework**: Next.js 15 (App Router) + TypeScript
+- **Database**: Supabase PostgreSQL with RLS
+- **Auth**: Supabase Auth
+- **UI**: shadcn/ui + Tailwind CSS
+- **Charts**: Recharts
+- **Validation**: Zod
+
+## Quick Start
 
 ```bash
+# Clone
+git clone https://github.com/xenuloyalofficer/xenus-health.git
+cd xenus-health/my-app
+
+# Install
+npm install
+
+# Setup env
+cp .env.example .env.local
+# Edit .env.local with your Supabase credentials
+
+# Push database
+supabase db push
+
+# Run dev
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Project Structure
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+my-app/
+├── src/
+│   ├── app/                 # Next.js App Router
+│   │   ├── dashboard/       # Main dashboard
+│   │   ├── api/             # API routes
+│   │   │   ├── healthz/     # Keepalive endpoint
+│   │   │   └── openclaw/    # OpenClaw intake
+│   │   └── ...              # Feature screens
+│   ├── components/
+│   │   ├── ui/              # shadcn components
+│   │   ├── dashboard/       # Dashboard widgets
+│   │   ├── layout/          # Layout components
+│   │   ├── charts/          # Chart components
+│   │   └── forms/           # Form components
+│   ├── lib/
+│   │   ├── db/              # Database client
+│   │   ├── engines/         # Treadmill + Momentum engines
+│   │   └── validations/     # Zod schemas
+│   └── types/               # TypeScript types
+├── supabase/
+│   └── migrations/          # Database migrations
+├── docs/
+│   ├── DECISIONS.md         # Architecture decisions
+│   ├── RUNBOOK.md           # Operations guide
+│   └── UI_SYSTEM.md         # Design system
+└── .github/workflows/       # CI/CD
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Documentation
 
-## Learn More
+- [DECISIONS.md](docs/DECISIONS.md) - Architecture and stack rationale
+- [RUNBOOK.md](docs/RUNBOOK.md) - Setup, deployment, troubleshooting
+- [UI_SYSTEM.md](docs/UI_SYSTEM.md) - Design system and component patterns
 
-To learn more about Next.js, take a look at the following resources:
+## License
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
