@@ -1,4 +1,4 @@
-import { createClientServer } from "@/lib/db/client"
+import { createClientServer } from "@/lib/db/server"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod/v4"
 import { calculateNutritionSnapshot } from "@/lib/nutrition/types"

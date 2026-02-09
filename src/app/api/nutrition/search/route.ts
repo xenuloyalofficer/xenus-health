@@ -1,4 +1,4 @@
-import { createClientServer } from "@/lib/db/client"
+import { createClientServer } from "@/lib/db/server"
 import { NextRequest, NextResponse } from "next/server"
 import { searchFoods, getFoodDetails, mapUSDAToFoodCatalog } from "@/lib/nutrition/usda"
 import { searchByName, searchByBarcode, mapOFFToFoodCatalog } from "@/lib/nutrition/openfoodfacts"

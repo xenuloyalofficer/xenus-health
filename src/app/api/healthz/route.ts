@@ -1,4 +1,4 @@
-import { createClientServer } from "@/lib/db/client";
+import { createClientServer } from "@/lib/db/server";
 import { NextResponse } from "next/server";
 
 export async function GET() {
