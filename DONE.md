@@ -1,3 +1,53 @@
+# Food Catalog Database Tables — Done (Prompt 3 Execution)
+
+## Migration Created
+**File:** `supabase/migrations/20260209130000_create_food_catalog_and_entries.sql`
+
+### Tables
+1. **food_catalog** — Master food database per user
+   - Columns: id, user_id, name, name_normalized, source, source_id, barcode, default_portion_g, per_100g (jsonb), times_logged, last_logged, created_at, updated_at
+   - RLS: SELECT, INSERT, UPDATE, DELETE scoped to `auth.uid() = user_id`
+
+2. **food_entries** — Daily food log
+   - Columns: id, user_id, food_catalog_id (FK), food_name, portion_g, meal_type, nutrition_snapshot (jsonb), notes, logged_at, created_at
+   - RLS: SELECT, INSERT, UPDATE, DELETE scoped to `auth.uid() = user_id`
+
+### Indexes
+- `food_catalog`: GIN trigram index on `name_normalized` (requires `pg_trgm` extension)
+- `food_catalog`: btree on `(user_id, times_logged DESC)` for frequency sorting
+- `food_entries`: btree on `(user_id, logged_at DESC)` for recent entries
+- `food_entries`: btree on `(user_id, meal_type, logged_at DESC)` for meal filtering
+
+### Trigger Function
+- `fn_food_entry_after_insert()` — AFTER INSERT on food_entries:
+  - Increments `times_logged` on the referenced food_catalog row
+  - Sets `last_logged = now()`
+  - Sets `updated_at = now()`
+
+### RPC Function
+- `get_food_suggestions(p_user_id, p_query, p_limit)` — Smart search:
+  - Searches `name_normalized ILIKE '%query%'`
+  - Orders: exact match → starts-with → contains
+  - Within each group: `times_logged DESC`
+  - Returns: id, name, default_portion_g, per_100g, times_logged
+
+### Action Required
+Run the SQL migration in Supabase SQL Editor.
+
+---
+
+# USDA Nutrition API Integration — Already Built (Prompt 4 — No Changes Needed)
+
+The USDA integration was already fully implemented:
+- `src/lib/nutrition/usda.ts` — `searchFoods()`, `getFoodDetails()`, `mapUSDAToFoodCatalog()`, Map-based cache
+- `src/lib/nutrition/openfoodfacts.ts` — Bonus: OpenFoodFacts integration (barcode + name search)
+- `src/lib/nutrition/types.ts` — `NutritionPer100g`, `FoodCatalogInsert`, `calculateNutritionSnapshot()`
+- `src/app/api/nutrition/search/route.ts` — Searches personal catalog (RPC) → USDA → OpenFoodFacts
+- `src/app/api/nutrition/log/route.ts` — Logs food entry with calculated nutrition snapshot
+- `src/app/api/nutrition/save/route.ts` — Saves external food to user's catalog (deduplicates by source_id)
+
+---
+
 # Sleep API Route — Done
 
 ## File Created
@@ -196,11 +246,78 @@ Optional: `distance_km`, `calories_burned`, `notes`
 
 ---
 
-# Body Measurements Feature — Done
+# Sleep Section — Done (Prompt 2 Execution)
 
-## Files Created
-- `supabase/migrations/20260208120000_create_body_measurement_entry.sql` — DB migration
-- `src/app/api/measurements/route.ts` — POST endpoint
+## What Changed (Prompt 2)
 
-## Database Table
-`body_measurement_entry` with 10 body part measurements (all optional), weight_kg, notes, measurement_date.
+### Database Migration Created
+**File:** `supabase/migrations/20260209120000_create_sleep_entries.sql`
+- `sleep_entries` table: id, user_id, sleep_start (timestamptz), sleep_end, duration_minutes, quality_rating (1-5), notes, created_at
+- RLS policies: SELECT, INSERT, UPDATE, DELETE — all scoped to `auth.uid() = user_id`
+- Index on `(user_id, sleep_start DESC)`
+
+### Sleep Card Enhancements (`src/components/tabs/health-tab.tsx`)
+
+**Sleep card is now always visible** (was hidden before 8pm when no active session):
+- **Before 8pm, no session:** Shows last night's sleep summary (duration, times, quality stars) + "Sleep tracking available after 8pm" note
+- **After 8pm, no session:** Shows "GOING TO SLEEP NOW" button in **indigo/dark** color (was lime — plan specifies dark to differentiate as nighttime action)
+- **Active session (sleeping):** Elapsed time ticks every minute via `setInterval`. Shows "I WOKE UP NOW" (lime) + "I woke up earlier" link
+- **"I woke up earlier" flow:** Expands inline time picker → user picks wake time → calculates duration → PATCHes the API → saves
+- **Woke state (rating):** "Good morning! You slept for Xh Ym" + star quality rating + "Complete Sleep Log" button + "I actually woke up earlier" link
+- **>24h stale session:** Yellow warning banner: "Looks like you forgot to log waking up. When did you wake up?"
+- **Star rating bug fixed:** Was showing stars incorrectly (`val >= sleepQuality`), now correct (`val <= sleepQuality`)
+
+### Already Existed (No Changes Needed)
+- Sleep API route (`/api/sleep`) with GET, POST, PATCH, DELETE
+- localStorage persistence (`health-os-sleep-tracking`)
+- `shouldShowSleepButton()` time-awareness helper (shows after 8pm / before 5am)
+- Sleep state machine (none → sleeping → woke)
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `supabase/migrations/20260209120000_create_sleep_entries.sql` | NEW: table + RLS + index |
+| `src/components/tabs/health-tab.tsx` | Enhanced sleep card: indigo button, woke-up-earlier, 24h edge case, last-night summary, elapsed ticker |
+
+### Build Status
+Next.js build passes with no errors.
+
+### Action Required
+Run the SQL migration in Supabase SQL Editor (Dashboard → SQL Editor → New Query).
+
+---
+
+# Body Measurements Feature — Done (Updated: Prompt 1 Execution)
+
+## What Changed (Prompt 1)
+
+### Database Migration Fixed
+- **Table renamed:** `body_measurement_entry` → `body_measurements` (matches API route)
+- **Column renamed:** `measurement_date` → `measured_at` (matches API route)
+- **RLS policies:** Added per-operation policies (SELECT, INSERT, UPDATE, DELETE) scoped to `auth.uid() = user_id`
+- **Index added:** `(user_id, measured_at DESC)` for fast lookups
+
+### Body Tab UI Updated (`src/components/tabs/body-tab.tsx`)
+- **Added missing calf fields:** L. Calf and R. Calf inputs in the measurement form
+- **Added optional weight field:** Weight (kg) input below the measurement grid
+- **Reordered fields:** Neck|Chest → L.Arm|R.Arm → Waist|Hips → L.Thigh|R.Thigh → L.Calf|R.Calf
+- **Scroll-to-form:** "Measure" button now scrolls smoothly to the form when opened
+- **Auto-refresh:** Measurement history refreshes after saving (no page reload needed)
+
+### Already Existed (No Changes Needed)
+- API route `/api/measurements` (GET + POST) with Zod validation
+- Measurements summary card with expand/collapse
+- Measurement history timeline
+- Calf fields in expanded summary view
+
+### Files Modified
+| File | Change |
+|------|--------|
+| `supabase/migrations/20260208120000_create_body_measurement_entry.sql` | Rewrote: correct table name, columns, RLS, index |
+| `src/components/tabs/body-tab.tsx` | Added calf fields, weight field, scroll behavior, auto-refresh |
+
+### Build Status
+Next.js build passes with no errors.
+
+### Action Required
+Run the SQL migration in Supabase SQL Editor (Dashboard → SQL Editor → New Query).

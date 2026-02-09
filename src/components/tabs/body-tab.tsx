@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Scale, Ruler, TrendingDown, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -103,6 +103,7 @@ export function BodyTab() {
   const [measNotes, setMeasNotes] = useState("");
   const [measLoading, setMeasLoading] = useState(false);
   const [showMeasForm, setShowMeasForm] = useState(false);
+  const measFormRef = useRef<HTMLDivElement>(null);
 
   const latestWeight = weightHistory[weightHistory.length - 1]?.weight_kg;
   const firstWeight = weightHistory[0]?.weight_kg;
@@ -182,11 +183,19 @@ export function BodyTab() {
       }
       toast.success("Body measurements saved");
       medium();
-      // Reset
+      // Reset form
       setMeasNeck(""); setMeasChest(""); setMeasLeftArm(""); setMeasRightArm("");
       setMeasWaist(""); setMeasHips(""); setMeasLeftThigh(""); setMeasRightThigh("");
       setMeasLeftCalf(""); setMeasRightCalf(""); setMeasWeight(""); setMeasNotes("");
       setShowMeasForm(false);
+      // Refresh measurement history
+      try {
+        const refreshRes = await fetch("/api/measurements");
+        if (refreshRes.ok) {
+          const { data: refreshData } = await refreshRes.json();
+          setMeasHistory((refreshData || []).slice(0, 5));
+        }
+      } catch {};
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
     } finally {
@@ -202,7 +211,13 @@ export function BodyTab() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Body</h1>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="rounded-full" onClick={() => setShowMeasForm(!showMeasForm)}>
+          <Button variant="outline" size="sm" className="rounded-full" onClick={() => {
+            const next = !showMeasForm;
+            setShowMeasForm(next);
+            if (next) {
+              setTimeout(() => measFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+            }
+          }}>
             <Ruler className="h-4 w-4 mr-1" />
             Measure
           </Button>
@@ -443,7 +458,7 @@ export function BodyTab() {
 
       {/* Add Measurement Form */}
       {showMeasForm && (
-        <div className="bg-card rounded-3xl border-2 border-primary/20 p-6 shadow-[4px_4px_0px_0px_rgba(223,255,0,0.2)]">
+        <div ref={measFormRef} className="bg-card rounded-3xl border-2 border-primary/20 p-6 shadow-[4px_4px_0px_0px_rgba(223,255,0,0.2)]">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
               <Ruler className="w-5 h-5 text-primary-foreground" />
@@ -473,20 +488,20 @@ export function BodyTab() {
                 <Input type="number" step="0.1" placeholder="100" value={measChest} onChange={(e) => setMeasChest(e.target.value)} className="h-12 rounded-xl mt-1" />
               </div>
               <div>
-                <Label className="text-xs font-medium text-muted-foreground">Waist (cm)</Label>
-                <Input type="number" step="0.1" placeholder="80" value={measWaist} onChange={(e) => setMeasWaist(e.target.value)} className="h-12 rounded-xl mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs font-medium text-muted-foreground">Hips (cm)</Label>
-                <Input type="number" step="0.1" placeholder="95" value={measHips} onChange={(e) => setMeasHips(e.target.value)} className="h-12 rounded-xl mt-1" />
-              </div>
-              <div>
                 <Label className="text-xs font-medium text-muted-foreground">L. Arm (cm)</Label>
                 <Input type="number" step="0.1" placeholder="33" value={measLeftArm} onChange={(e) => setMeasLeftArm(e.target.value)} className="h-12 rounded-xl mt-1" />
               </div>
               <div>
                 <Label className="text-xs font-medium text-muted-foreground">R. Arm (cm)</Label>
                 <Input type="number" step="0.1" placeholder="33" value={measRightArm} onChange={(e) => setMeasRightArm(e.target.value)} className="h-12 rounded-xl mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Waist (cm)</Label>
+                <Input type="number" step="0.1" placeholder="80" value={measWaist} onChange={(e) => setMeasWaist(e.target.value)} className="h-12 rounded-xl mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Hips (cm)</Label>
+                <Input type="number" step="0.1" placeholder="95" value={measHips} onChange={(e) => setMeasHips(e.target.value)} className="h-12 rounded-xl mt-1" />
               </div>
               <div>
                 <Label className="text-xs font-medium text-muted-foreground">L. Thigh (cm)</Label>
@@ -496,6 +511,19 @@ export function BodyTab() {
                 <Label className="text-xs font-medium text-muted-foreground">R. Thigh (cm)</Label>
                 <Input type="number" step="0.1" placeholder="55" value={measRightThigh} onChange={(e) => setMeasRightThigh(e.target.value)} className="h-12 rounded-xl mt-1" />
               </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">L. Calf (cm)</Label>
+                <Input type="number" step="0.1" placeholder="38" value={measLeftCalf} onChange={(e) => setMeasLeftCalf(e.target.value)} className="h-12 rounded-xl mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">R. Calf (cm)</Label>
+                <Input type="number" step="0.1" placeholder="38" value={measRightCalf} onChange={(e) => setMeasRightCalf(e.target.value)} className="h-12 rounded-xl mt-1" />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">Weight (kg, optional)</Label>
+              <Input type="number" step="0.1" placeholder="70.5" value={measWeight} onChange={(e) => setMeasWeight(e.target.value)} className="h-12 rounded-xl mt-1" />
             </div>
 
             <div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Moon, Pill, Utensils, Zap, Plus, Search, Check, X, Sun, Star, Coffee, Battery, Smile, Meh, Frown } from "lucide-react";
+import { Moon, Pill, Utensils, Zap, Plus, Search, Check, X, Sun, Star, Coffee, Battery, Smile, Meh, Frown, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +51,12 @@ function formatElapsedSleep(bedtime: string): string {
   return `${hours}h ${minutes}m`;
 }
 
+function formatDurationMinutes(mins: number): string {
+  const hours = Math.floor(mins / 60);
+  const minutes = Math.round(mins % 60);
+  return `${hours}h ${minutes}m`;
+}
+
 // --- Types ---
 interface MedicationPreset {
   id: string;
@@ -74,6 +80,10 @@ export function HealthTab() {
   );
   const [sleepQuality, setSleepQuality] = useState(3);
   const [sleepLoading, setSleepLoading] = useState(false);
+  const [sleepElapsed, setSleepElapsed] = useState("");
+  const [showWakeTimePicker, setShowWakeTimePicker] = useState(false);
+  const [customWakeTime, setCustomWakeTime] = useState("");
+  const [lastNightSleep, setLastNightSleep] = useState<{ duration_minutes: number; quality_rating: number | null; sleep_start: string; sleep_end: string } | null>(null);
 
   // Meds state
   const [medPresets, setMedPresets] = useState<MedicationPreset[]>([]);
@@ -106,6 +116,34 @@ export function HealthTab() {
   useEffect(() => {
     setSleepState(loadSleepState());
   }, []);
+
+  // Tick elapsed sleep time every minute
+  useEffect(() => {
+    if (sleepState.sleepStatus !== "sleeping" || !sleepState.bedtime) return;
+    setSleepElapsed(formatElapsedSleep(sleepState.bedtime));
+    const interval = setInterval(() => {
+      setSleepElapsed(formatElapsedSleep(sleepState.bedtime!));
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [sleepState.sleepStatus, sleepState.bedtime]);
+
+  // Load last night's sleep for daytime summary
+  useEffect(() => {
+    async function loadLastSleep() {
+      try {
+        const res = await fetch("/api/sleep?limit=1");
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data && data.length > 0 && data[0].sleep_end) {
+            setLastNightSleep(data[0]);
+          }
+        }
+      } catch {}
+    }
+    if (sleepState.sleepStatus === "none") {
+      loadLastSleep();
+    }
+  }, [sleepState.sleepStatus]);
 
   // Load medication presets
   useEffect(() => {
@@ -207,6 +245,52 @@ export function HealthTab() {
       setSleepLoading(false);
     }
   };
+
+  const handleWokeUpEarlier = async () => {
+    if (!customWakeTime) {
+      toast.error("Please select the time you woke up");
+      return;
+    }
+    setSleepLoading(true);
+    try {
+      // Build a full datetime from today's date + the entered time
+      const today = new Date().toISOString().slice(0, 10);
+      const wakeIso = new Date(`${today}T${customWakeTime}`).toISOString();
+      const bedtime = sleepState.bedtime;
+      const durationMs = bedtime ? new Date(wakeIso).getTime() - new Date(bedtime).getTime() : 0;
+      const durationMinutes = Math.round(durationMs / 60000);
+
+      const res = await fetch("/api/sleep", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: sleepState.currentSleepId,
+          sleep_end: wakeIso,
+          duration_minutes: durationMinutes > 0 ? durationMinutes : 0,
+          quality_rating: sleepQuality,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Failed to update (${res.status})`);
+      }
+      toast.success(`Sleep logged: ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m`);
+      success();
+      updateSleepState({ sleepStatus: "none", currentSleepId: null, bedtime: null });
+      setSleepQuality(3);
+      setShowWakeTimePicker(false);
+      setCustomWakeTime("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSleepLoading(false);
+    }
+  };
+
+  // Check if sleep session is stale (>24h)
+  const isSleepStale = sleepState.sleepStatus === "sleeping" && sleepState.bedtime
+    ? (Date.now() - new Date(sleepState.bedtime).getTime()) > 24 * 60 * 60 * 1000
+    : false;
 
   // --- Meds handlers ---
   const handleLogMed = async (preset: MedicationPreset, status: "taken" | "skipped") => {
@@ -381,8 +465,9 @@ export function HealthTab() {
     { level: 5, icon: Smile, label: "Great", color: "bg-primary" },
   ];
 
-  const showSleep = shouldShowSleepButton() || sleepState.sleepStatus !== "none";
-  const medProgress = medPresets.length > 0 
+  const isSleepTime = shouldShowSleepButton();
+  const hasActiveSleepSession = sleepState.sleepStatus !== "none";
+  const medProgress = medPresets.length > 0
     ? Math.round((Object.keys(todayMeds).length / medPresets.length) * 100)
     : 0;
 
@@ -393,95 +478,219 @@ export function HealthTab() {
         <h1 className="text-3xl font-bold tracking-tight">Health</h1>
       </div>
 
-      {/* Sleep Card */}
-      {showSleep && (
-        <div className={cn(
-          "rounded-3xl border-2 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.1)] transition-all",
-          sleepState.sleepStatus === "sleeping" ? "bg-indigo-500 border-indigo-600 text-white" : "bg-card border-foreground/5"
-        )}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className={cn(
-              "w-12 h-12 rounded-2xl flex items-center justify-center",
-              sleepState.sleepStatus === "sleeping" ? "bg-white/20" : "bg-indigo-100 text-indigo-600"
-            )}>
-              <Moon className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="font-bold text-lg">Sleep</h2>
-              {sleepState.sleepStatus === "sleeping" && (
-                <p className="text-white/80 text-sm">Sleeping now</p>
-              )}
-            </div>
+      {/* Sleep Card — always visible */}
+      <div className={cn(
+        "rounded-3xl border-2 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.1)] transition-all",
+        sleepState.sleepStatus === "sleeping" ? "bg-indigo-500 border-indigo-600 text-white" : "bg-card border-foreground/5"
+      )}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className={cn(
+            "w-12 h-12 rounded-2xl flex items-center justify-center",
+            sleepState.sleepStatus === "sleeping" ? "bg-white/20" : "bg-indigo-100 text-indigo-600"
+          )}>
+            <Moon className="w-6 h-6" />
           </div>
-
-          {sleepState.sleepStatus === "none" && (
-            <div className="space-y-4">
-              <p className="text-muted-foreground">
-                Tap when you&apos;re heading to bed. We&apos;ll track the time.
+          <div>
+            <h2 className="font-bold text-lg">Sleep</h2>
+            {sleepState.sleepStatus === "sleeping" && (
+              <p className="text-white/80 text-sm">Sleeping now</p>
+            )}
+            {sleepState.sleepStatus === "none" && (
+              <p className="text-sm text-muted-foreground">
+                {isSleepTime ? "Tap when you\u2019re heading to bed" : "Track your sleep nightly"}
               </p>
+            )}
+          </div>
+        </div>
+
+        {/* STATE: none — no active session */}
+        {sleepState.sleepStatus === "none" && (
+          <div className="space-y-4">
+            {isSleepTime ? (
+              /* After 8pm: show "Going to sleep" button */
               <Button
                 onClick={handleGoingToSleep}
                 disabled={sleepLoading}
-                className="w-full h-14 rounded-2xl text-lg font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-[4px_4px_0px_0px_rgba(223,255,0,0.4)]"
+                className="w-full h-14 rounded-2xl text-lg font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-[4px_4px_0px_0px_rgba(67,56,202,0.4)]"
               >
-                {sleepLoading ? "Saving..." : "GOING TO SLEEP"}
+                {sleepLoading ? "Saving..." : "GOING TO SLEEP NOW"}
               </Button>
-            </div>
-          )}
-
-          {sleepState.sleepStatus === "sleeping" && (
-            <div className="space-y-4">
-              <div className="text-center py-4">
-                <p className="text-white/80 text-sm mb-1">In bed since {sleepState.bedtime ? formatTime(sleepState.bedtime) : "..."}</p>
-                {sleepState.bedtime && (
-                  <p className="text-5xl font-bold tabular-nums">{formatElapsedSleep(sleepState.bedtime)}</p>
-                )}
-              </div>
-              <Button
-                onClick={handleGoodMorning}
-                className="w-full h-14 rounded-2xl text-lg font-bold bg-white text-foreground hover:bg-white/90 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)]"
-              >
-                GOOD MORNING
-              </Button>
-            </div>
-          )}
-
-          {sleepState.sleepStatus === "woke" && (
-            <div className="space-y-4">
-              <div className="text-center">
-                <p className="text-muted-foreground text-sm">Slept for {sleepState.bedtime ? formatElapsedSleep(sleepState.bedtime) : "..."}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium mb-3 text-center">How did you sleep?</p>
-                <div className="flex gap-2 justify-center">
-                  {[1, 2, 3, 4, 5].map((val) => (
-                    <button
-                      key={val}
-                      onClick={() => setSleepQuality(val)}
-                      className={cn(
-                        "w-12 h-12 rounded-xl text-xl transition-all",
-                        sleepQuality === val 
-                          ? "bg-primary text-primary-foreground shadow-lg scale-110" 
-                          : "bg-secondary hover:bg-secondary/80"
-                      )}
-                    >
-                      {val >= sleepQuality ? "★" : "☆"}
-                    </button>
-                  ))}
+            ) : (
+              /* Before 8pm: show last night's summary or placeholder */
+              lastNightSleep ? (
+                <div className="bg-secondary/50 rounded-2xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-muted-foreground">Last Night</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatTime(lastNightSleep.sleep_start)} — {formatTime(lastNightSleep.sleep_end)}
+                    </p>
+                  </div>
+                  <p className="text-3xl font-bold tabular-nums">
+                    {formatDurationMinutes(lastNightSleep.duration_minutes)}
+                  </p>
+                  {lastNightSleep.quality_rating && (
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <span key={s} className={cn("text-lg", s <= lastNightSleep.quality_rating! ? "text-yellow-500" : "text-muted-foreground/30")}>★</span>
+                      ))}
+                      <span className="text-xs text-muted-foreground ml-1 self-center">{qualityLabels[(lastNightSleep.quality_rating ?? 3) - 1]}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">Sleep tracking available after 8pm</p>
                 </div>
-                <p className="text-xs text-muted-foreground text-center mt-2">{qualityLabels[sleepQuality - 1]}</p>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-muted-foreground text-sm">Sleep tracking available after 8pm</p>
+                </div>
+              )
+            )}
+          </div>
+        )}
+
+        {/* STATE: sleeping — active session */}
+        {sleepState.sleepStatus === "sleeping" && (
+          <div className="space-y-4">
+            {/* Stale session warning (>24h) */}
+            {isSleepStale && (
+              <div className="flex items-center gap-2 bg-yellow-500/20 rounded-xl p-3 text-sm">
+                <AlertTriangle className="w-5 h-5 text-yellow-300 shrink-0" />
+                <span className="text-white/90">Looks like you forgot to log waking up. When did you wake up?</span>
               </div>
-              <Button
-                onClick={handleSaveMorning}
-                disabled={sleepLoading}
-                className="w-full h-12 rounded-xl font-bold"
-              >
-                {sleepLoading ? "Saving..." : "Complete Sleep Log"}
-              </Button>
+            )}
+
+            <div className="text-center py-4">
+              <p className="text-white/80 text-sm mb-1">In bed since {sleepState.bedtime ? formatTime(sleepState.bedtime) : "..."}</p>
+              <p className="text-5xl font-bold tabular-nums">{sleepElapsed || (sleepState.bedtime ? formatElapsedSleep(sleepState.bedtime) : "--")}</p>
             </div>
-          )}
-        </div>
-      )}
+
+            <Button
+              onClick={handleGoodMorning}
+              className="w-full h-14 rounded-2xl text-lg font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-[4px_4px_0px_0px_rgba(223,255,0,0.4)]"
+            >
+              I WOKE UP NOW
+            </Button>
+
+            {/* "I woke up earlier" toggle */}
+            {!showWakeTimePicker ? (
+              <button
+                onClick={() => setShowWakeTimePicker(true)}
+                className="w-full text-center text-white/70 hover:text-white text-sm underline underline-offset-2 transition-colors"
+              >
+                I woke up earlier
+              </button>
+            ) : (
+              <div className="bg-white/10 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-white/70" />
+                  <p className="text-sm text-white/80">What time did you wake up?</p>
+                </div>
+                <input
+                  type="time"
+                  value={customWakeTime}
+                  onChange={(e) => setCustomWakeTime(e.target.value)}
+                  className="w-full h-12 rounded-xl bg-white/20 text-white text-center text-lg px-4 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-10 rounded-xl bg-transparent border-white/30 text-white hover:bg-white/10"
+                    onClick={() => { setShowWakeTimePicker(false); setCustomWakeTime(""); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleWokeUpEarlier}
+                    disabled={sleepLoading || !customWakeTime}
+                    className="flex-1 h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    {sleepLoading ? "Saving..." : "Confirm"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STATE: woke — rating quality */}
+        {sleepState.sleepStatus === "woke" && (
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-lg font-semibold">Good morning!</p>
+              <p className="text-muted-foreground text-sm">You slept for {sleepState.bedtime ? formatElapsedSleep(sleepState.bedtime) : "..."}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-3 text-center">How did you sleep?</p>
+              <div className="flex gap-2 justify-center">
+                {[1, 2, 3, 4, 5].map((val) => (
+                  <button
+                    key={val}
+                    onClick={() => setSleepQuality(val)}
+                    className={cn(
+                      "w-12 h-12 rounded-xl text-xl transition-all",
+                      sleepQuality === val
+                        ? "bg-primary text-primary-foreground shadow-lg scale-110"
+                        : "bg-secondary hover:bg-secondary/80"
+                    )}
+                  >
+                    {val <= sleepQuality ? "★" : "☆"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground text-center mt-2">{qualityLabels[sleepQuality - 1]}</p>
+            </div>
+
+            {/* "I woke up earlier" option in woke state too */}
+            {!showWakeTimePicker ? (
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={handleSaveMorning}
+                  disabled={sleepLoading}
+                  className="w-full h-12 rounded-xl font-bold"
+                >
+                  {sleepLoading ? "Saving..." : "Complete Sleep Log"}
+                </Button>
+                <button
+                  onClick={() => setShowWakeTimePicker(true)}
+                  className="w-full text-center text-muted-foreground hover:text-foreground text-sm underline underline-offset-2 transition-colors"
+                >
+                  I actually woke up earlier
+                </button>
+              </div>
+            ) : (
+              <div className="bg-secondary/50 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">What time did you wake up?</p>
+                </div>
+                <input
+                  type="time"
+                  value={customWakeTime}
+                  onChange={(e) => setCustomWakeTime(e.target.value)}
+                  className="w-full h-12 rounded-xl bg-secondary text-foreground text-center text-lg px-4 border-2 border-foreground/10 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-10 rounded-xl"
+                    onClick={() => { setShowWakeTimePicker(false); setCustomWakeTime(""); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleWokeUpEarlier}
+                    disabled={sleepLoading || !customWakeTime}
+                    className="flex-1 h-10 rounded-xl"
+                  >
+                    {sleepLoading ? "Saving..." : "Confirm"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Food / Calories Card */}
       <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
