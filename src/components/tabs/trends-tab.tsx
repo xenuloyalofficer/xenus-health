@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Area, AreaChart,
+  ReferenceLine, Cell,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Minus, Moon, Dumbbell, Utensils, Zap, Scale, Activity, Calendar
@@ -209,6 +210,27 @@ export function TrendsTab() {
     }
   }
 
+  // Exercise streak
+  const exerciseStreak = (() => {
+    if (!data?.exercise?.length) return 0;
+    const exerciseDates = new Set(data.exercise.map((e) => e.date));
+    let streak = 0;
+    const d = new Date();
+    d.setDate(d.getDate() - 1); // start from yesterday
+    while (true) {
+      const dateStr = d.toISOString().slice(0, 10);
+      if (exerciseDates.has(dateStr)) {
+        streak++;
+        d.setDate(d.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    // Check today too
+    if (exerciseDates.has(new Date().toISOString().slice(0, 10))) streak++;
+    return streak;
+  })();
+
   const hasNoData = data &&
     data.weight.length === 0 &&
     data.sleep.length === 0 &&
@@ -294,6 +316,15 @@ export function TrendsTab() {
           </div>
 
           {/* Weight Chart */}
+          {data.weight.length < 2 && (
+            <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center"><Scale className="w-5 h-5 text-white" /></div>
+                <h3 className="font-bold">Weight</h3>
+              </div>
+              <p className="text-sm text-muted-foreground text-center py-6">Log at least 2 weights to see your trend</p>
+            </div>
+          )}
           {data.weight.length >= 2 && (
             <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
               <div className="flex items-center justify-between mb-4">
@@ -351,6 +382,15 @@ export function TrendsTab() {
           )}
 
           {/* Sleep Chart */}
+          {data.sleep.length < 2 && (
+            <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center"><Moon className="w-5 h-5 text-white" /></div>
+                <h3 className="font-bold">Sleep Duration</h3>
+              </div>
+              <p className="text-sm text-muted-foreground text-center py-6">Start tracking sleep to see patterns</p>
+            </div>
+          )}
           {data.sleep.length >= 2 && (
             <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
               <div className="flex items-center justify-between mb-4">
@@ -382,11 +422,13 @@ export function TrendsTab() {
                       formatter={(value) => [`${value}h`, "Sleep"]}
                       labelFormatter={(label) => formatDateShort(String(label))}
                     />
-                    <Bar
-                      dataKey="duration_hours"
-                      fill="#8b5cf6"
-                      radius={[6, 6, 0, 0]}
-                    />
+                    <Bar dataKey="duration_hours" radius={[6, 6, 0, 0]}>
+                      {data.sleep.map((entry, idx) => {
+                        const h = entry.duration_hours || 0;
+                        const color = h < 6 ? "#ef4444" : h < 7 ? "#eab308" : h <= 9 ? "#22c55e" : "#8b5cf6";
+                        return <Cell key={idx} fill={color} />;
+                      })}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -394,6 +436,15 @@ export function TrendsTab() {
           )}
 
           {/* Nutrition Chart */}
+          {data.nutrition.length < 2 && (
+            <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-500 flex items-center justify-center"><Utensils className="w-5 h-5 text-white" /></div>
+                <h3 className="font-bold">Nutrition</h3>
+              </div>
+              <p className="text-sm text-muted-foreground text-center py-6">Log food to track your nutrition</p>
+            </div>
+          )}
           {data.nutrition.length >= 2 && (
             <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
               <div className="flex items-center justify-between mb-4">
@@ -439,6 +490,15 @@ export function TrendsTab() {
           )}
 
           {/* Exercise Chart */}
+          {data.exercise.length < 2 && (
+            <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center"><Dumbbell className="w-5 h-5 text-white" /></div>
+                <h3 className="font-bold">Exercise</h3>
+              </div>
+              <p className="text-sm text-muted-foreground text-center py-6">Complete your first workout to start tracking</p>
+            </div>
+          )}
           {data.exercise.length >= 2 && (
             <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
               <div className="flex items-center justify-between mb-4">
@@ -448,7 +508,10 @@ export function TrendsTab() {
                   </div>
                   <div>
                     <h3 className="font-bold">Exercise</h3>
-                    <p className="text-xs text-muted-foreground">{data.exercise.length} sessions</p>
+                    <p className="text-xs text-muted-foreground">
+                      {data.exercise.length} sessions
+                      {exerciseStreak > 0 && <> · {exerciseStreak} day streak</>}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -482,6 +545,15 @@ export function TrendsTab() {
           )}
 
           {/* Mood/Energy Chart */}
+          {data.mood.length < 2 && (
+            <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-yellow-500 flex items-center justify-center"><Zap className="w-5 h-5 text-white" /></div>
+                <h3 className="font-bold">Energy & Mood</h3>
+              </div>
+              <p className="text-sm text-muted-foreground text-center py-6">Log your mood to discover patterns</p>
+            </div>
+          )}
           {data.mood.length >= 2 && (
             <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
               <div className="flex items-center justify-between mb-4">
