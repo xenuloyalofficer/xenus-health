@@ -127,13 +127,6 @@ export function AuthForm() {
           </TabsContent>
         </Tabs>
         
-        <div className="mt-4 p-3 bg-muted rounded-lg">
-          <p className="text-sm text-muted-foreground">
-            <strong>Demo account:</strong><br/>
-            Email: xenu@healthos.local<br/>
-            Password: temp123456
-          </p>
-        </div>
       </CardContent>
     </Card>
   );

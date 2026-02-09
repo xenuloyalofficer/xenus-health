@@ -118,6 +118,12 @@ export function NutritionSection() {
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Edit entry state
+  const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
+  const [editEntryPortionG, setEditEntryPortionG] = useState(100);
+  const [editEntryMealType, setEditEntryMealType] = useState<string>("breakfast");
+  const [editEntrySaving, setEditEntrySaving] = useState(false);
+
   // Custom food form state
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customName, setCustomName] = useState("");
@@ -294,6 +300,46 @@ export function NutritionSection() {
       toast.error(err instanceof Error ? err.message : "Failed to delete");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleEditEntry = (entry: FoodEntry) => {
+    setEditingEntry(entry);
+    setEditEntryPortionG(entry.portion_g);
+    setEditEntryMealType(entry.meal_type || "snack");
+  };
+
+  const handleSaveEditEntry = async () => {
+    if (!editingEntry) return;
+    setEditEntrySaving(true);
+    try {
+      // Recalculate nutrition snapshot based on new portion
+      const ratio = editEntryPortionG / editingEntry.portion_g;
+      const oldSnap = editingEntry.nutrition_snapshot || {};
+      const newSnap: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(oldSnap)) {
+        newSnap[key] = typeof val === "number" ? Math.round(val * ratio * 10) / 10 : val;
+      }
+
+      const res = await fetch("/api/food", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingEntry.id,
+          portion_g: editEntryPortionG,
+          meal_type: editEntryMealType,
+          nutrition_snapshot: newSnap,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      toast.success("Entry updated");
+      medium();
+      setEditingEntry(null);
+      await loadTodayData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setEditEntrySaving(false);
     }
   };
 
@@ -1033,24 +1079,94 @@ export function NutritionSection() {
                 </div>
                 <div className="space-y-1">
                   {entries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-secondary/50 transition-colors group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{entry.food_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {entry.portion_g}g · {Math.round(entry.nutrition_snapshot?.calories ?? 0)} cal
-                        </p>
+                    editingEntry?.id === entry.id ? (
+                      <div key={entry.id} className="bg-secondary/50 rounded-xl p-3 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold truncate pr-2">{entry.food_name}</p>
+                          <button onClick={() => setEditingEntry(null)} className="p-1 rounded-lg hover:bg-secondary shrink-0">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium">Portion (g)</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              onClick={() => setEditEntryPortionG(Math.max(10, editEntryPortionG - 10))}
+                              className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80 shrink-0"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={editEntryPortionG}
+                              onChange={(e) => setEditEntryPortionG(Math.max(1, parseInt(e.target.value) || 0))}
+                              className="h-9 rounded-lg text-center font-bold flex-1"
+                            />
+                            <button
+                              onClick={() => setEditEntryPortionG(editEntryPortionG + 10)}
+                              className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center hover:bg-secondary/80 shrink-0"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium">Meal</Label>
+                          <div className="flex gap-1.5 mt-1">
+                            {MEAL_ORDER.map((mt) => (
+                              <button
+                                key={mt}
+                                onClick={() => setEditEntryMealType(mt)}
+                                className={cn(
+                                  "flex-1 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors",
+                                  editEntryMealType === mt
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-secondary hover:bg-secondary/80"
+                                )}
+                              >
+                                {mt}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setEditingEntry(null)} className="flex-1 rounded-lg">
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={handleSaveEditEntry} disabled={editEntrySaving} className="flex-1 rounded-lg">
+                            {editEntrySaving ? "Saving..." : "Save"}
+                          </Button>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteEntry(entry.id)}
-                        disabled={deletingId === entry.id}
-                        className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-100 hover:text-red-600 transition-all shrink-0 ml-2"
+                    ) : (
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-secondary/50 transition-colors"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{entry.food_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {entry.portion_g}g · {Math.round(entry.nutrition_snapshot?.calories ?? 0)} cal
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          <button
+                            onClick={() => handleEditEntry(entry)}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEntry(entry.id)}
+                            disabled={deletingId === entry.id}
+                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-red-100 hover:text-red-600 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
                   ))}
                 </div>
               </div>

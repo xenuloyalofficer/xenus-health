@@ -14,6 +14,7 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { SwipeableCard } from "@/components/ui/swipeable-card";
 import { getGreeting, getTimeOfDay } from "@/lib/time-awareness";
 import { cn } from "@/lib/utils";
+import { EnergyMoodCard } from "@/components/energy-mood-card";
 import type { TabId } from "@/components/layout/app-shell";
 
 interface DailySummary {
@@ -55,7 +56,7 @@ function buildChecklist(summary: DailySummary | null): ChecklistItem[] {
       { id: "exercise", label: "Exercise", icon: Dumbbell, status: "pending", detail: null, tab: "exercise" },
       { id: "food", label: "Food", icon: Utensils, status: "pending", detail: null, tab: "nutrition" },
       { id: "water", label: "Water", icon: Droplets, status: "pending", detail: null, tab: "nutrition" },
-      { id: "energy", label: "Energy/Mood", icon: Zap, status: "pending", detail: null, tab: "health" },
+      { id: "energy", label: "Energy/Mood", icon: Zap, status: "pending", detail: null, tab: "home" },
       { id: "measurements", label: "Measurements", icon: Ruler, status: "optional", detail: "Weekly", tab: "body" },
     ]
   }
@@ -112,7 +113,7 @@ function buildChecklist(summary: DailySummary | null): ChecklistItem[] {
       id: "energy", label: "Energy/Mood", icon: Zap,
       status: summary.mood ? "logged" : "pending",
       detail: summary.mood ? `Energy ${summary.mood.energy_level}/5, Mood ${summary.mood.mood_level}/5` : null,
-      tab: "health",
+      tab: "home",
     },
     {
       id: "measurements", label: "Measurements", icon: Ruler,
@@ -253,6 +254,11 @@ export function HomeTab({ onNavigate }: HomeTabProps) {
       <div className="animate-fade-in-up stagger-1">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{greeting}</h1>
         <p className="text-muted-foreground font-medium mt-1">{format(today, "EEEE, MMMM do")}</p>
+      </div>
+
+      {/* Energy & Mood — first action of the day */}
+      <div className="animate-fade-in-up stagger-2">
+        <EnergyMoodCard />
       </div>
 
       {/* Momentum Score - Large Circular Gauge */}

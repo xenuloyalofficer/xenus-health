@@ -106,6 +106,61 @@ export async function DELETE(request: NextRequest) {
   }
 }
 
+// --- PATCH: Update a food entry (portion, meal, nutrition) ---
+
+const patchEntrySchema = z.object({
+  id: z.string().uuid(),
+  portion_g: z.number().positive().max(50000).optional(),
+  meal_type: z.enum(["breakfast", "lunch", "dinner", "snack"]).optional(),
+  nutrition_snapshot: z.record(z.string(), z.unknown()).optional(),
+})
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = await createClientServer()
+    const userId = await getAuthUserId(supabase)
+    if (!userId) return errorResponse("Unauthorized", 401)
+
+    const body = await request.json()
+    const parsed = patchEntrySchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", issues: parsed.error.issues },
+        { status: 400 }
+      )
+    }
+
+    const { id, ...updates } = parsed.data
+    // Only include fields that were provided
+    const updateData: Record<string, unknown> = {}
+    if (updates.portion_g !== undefined) updateData.portion_g = updates.portion_g
+    if (updates.meal_type !== undefined) updateData.meal_type = updates.meal_type
+    if (updates.nutrition_snapshot !== undefined) updateData.nutrition_snapshot = updates.nutrition_snapshot
+
+    if (Object.keys(updateData).length === 0) {
+      return errorResponse("No fields to update", 400)
+    }
+
+    const { data, error } = await supabase
+      .from("food_entries")
+      .update(updateData)
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select()
+      .single()
+
+    if (error) {
+      if (error.code === "PGRST116") return errorResponse("Entry not found", 404)
+      throw error
+    }
+
+    return NextResponse.json({ data })
+  } catch (error) {
+    console.error("[PATCH /api/food]", error)
+    return errorResponse("Failed to update food entry", 500)
+  }
+}
+
 // --- POST: Create a food entry ---
 
 export async function POST(request: NextRequest) {

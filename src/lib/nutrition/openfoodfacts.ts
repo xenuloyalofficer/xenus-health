@@ -95,6 +95,8 @@ export async function searchByName(query: string, pageSize = 10): Promise<OFFSea
     page_size: String(pageSize),
     json: "true",
     fields: "code,product_name,brands,nutriments,serving_size,serving_quantity",
+    lc: "en",
+    cc: "us",
   })
 
   const res = await throttledFetch(`${BASE_URL}/search?${params}`)
