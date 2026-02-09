@@ -114,6 +114,27 @@ export async function GET(request: NextRequest) {
       }))
     }
 
+    if (type === "all" || type === "water") {
+      const { data } = await supabase
+        .from("water_entries")
+        .select("amount_ml, logged_at")
+        .eq("user_id", userId)
+        .gte("logged_at", since.toISOString())
+        .order("logged_at", { ascending: true })
+
+      // Aggregate by day
+      const byDay: Record<string, number> = {}
+      for (const entry of data || []) {
+        const day = entry.logged_at?.slice(0, 10)
+        if (!day) continue
+        byDay[day] = (byDay[day] || 0) + entry.amount_ml
+      }
+      result.water = Object.entries(byDay).map(([date, total_ml]) => ({
+        date,
+        total_ml,
+      }))
+    }
+
     return NextResponse.json({ data: result })
   } catch (error) {
     console.error("[GET /api/trends]", error)

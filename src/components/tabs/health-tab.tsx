@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Moon, Pill, Zap, Plus, Check, X, Battery, Smile, Meh, Frown, Clock, AlertTriangle } from "lucide-react";
-import { NutritionSection } from "@/components/nutrition/nutrition-section";
 import { BloodWorkSection } from "@/components/blood-work/blood-work-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +92,7 @@ export function HealthTab() {
   const [moodLevel, setMoodLevel] = useState<number | null>(null);
   const [moodNotes, setMoodNotes] = useState("");
   const [moodLoading, setMoodLoading] = useState(false);
+  const [moodAlreadyLogged, setMoodAlreadyLogged] = useState(false);
 
   // Load sleep state on mount
   useEffect(() => {
@@ -127,19 +127,60 @@ export function HealthTab() {
     }
   }, [sleepState.sleepStatus]);
 
-  // Load medication presets
+  // Load medication presets + today's logged meds
   useEffect(() => {
     async function loadPresets() {
       try {
-        const res = await fetch("/api/medication-presets");
-        if (res.ok) {
-          const { data } = await res.json();
-          setMedPresets(data || []);
+        const today = new Date().toISOString().slice(0, 10);
+        const [presetsRes, todayRes] = await Promise.all([
+          fetch("/api/medication-presets"),
+          fetch(`/api/medication?date=${today}`),
+        ]);
+        if (presetsRes.ok) {
+          const { data: presets } = await presetsRes.json();
+          setMedPresets(presets || []);
+
+          // Match today's entries to presets by medication_name
+          if (todayRes.ok) {
+            const { data: entries } = await todayRes.json();
+            if (entries && presets) {
+              const medsMap: Record<string, string> = {};
+              for (const entry of entries) {
+                const preset = presets.find(
+                  (p: MedicationPreset) => p.medication_name === entry.medication_name
+                );
+                if (preset) medsMap[preset.id] = entry.status;
+              }
+              setTodayMeds(medsMap);
+            }
+          }
         }
       } catch {}
       setMedPresetsLoading(false);
     }
     loadPresets();
+  }, []);
+
+  // Load today's mood/energy on mount
+  useEffect(() => {
+    async function loadTodayMood() {
+      try {
+        const res = await fetch("/api/energy?limit=1");
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data && data.length > 0) {
+            const today = new Date().toISOString().slice(0, 10);
+            const entryDate = data[0].logged_at?.slice(0, 10);
+            if (entryDate === today) {
+              setEnergyLevel(data[0].energy_level);
+              setMoodLevel(data[0].mood_level);
+              setMoodAlreadyLogged(true);
+            }
+          }
+        }
+      } catch {}
+    }
+    loadTodayMood();
   }, []);
 
   const updateSleepState = useCallback((update: Partial<SleepTrackingState>) => {
@@ -331,9 +372,7 @@ export function HealthTab() {
       if (!res.ok) throw new Error("Failed to save");
       toast.success("Mood & energy logged");
       medium();
-      setEnergyLevel(null);
-      setMoodLevel(null);
-      setMoodNotes("");
+      setMoodAlreadyLogged(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
     } finally {
@@ -587,9 +626,6 @@ export function HealthTab() {
         )}
       </div>
 
-      {/* Nutrition Section (search, log, today's entries) */}
-      <NutritionSection />
-
       {/* Medications Card */}
       <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
         <div className="flex items-center justify-between mb-4">
@@ -798,7 +834,7 @@ export function HealthTab() {
           disabled={moodLoading || energyLevel === null || moodLevel === null}
           className="w-full h-12 rounded-xl font-bold"
         >
-          {moodLoading ? "Saving..." : "Log Energy & Mood"}
+          {moodLoading ? "Saving..." : moodAlreadyLogged ? "Update Energy & Mood" : "Log Energy & Mood"}
         </Button>
       </div>
     </div>

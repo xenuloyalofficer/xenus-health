@@ -2,6 +2,11 @@ import { createClientServer } from "@/lib/db/server"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod/v4"
 
+const updateSchema = z.object({
+  id: z.string().uuid(),
+  per_100g: z.record(z.string(), z.unknown()),
+})
+
 const saveSchema = z.object({
   name: z.string().min(1).max(500),
   name_normalized: z.string().min(1).max(500),
@@ -75,5 +80,41 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[POST /api/nutrition/save]", error)
     return errorResponse("Failed to save food to catalog", 500)
+  }
+}
+
+// --- PATCH: Update food_catalog per_100g ---
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = await createClientServer()
+    const userId = await getAuthUserId(supabase)
+    if (!userId) return errorResponse("Unauthorized", 401)
+
+    const body = await request.json()
+    const parsed = updateSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Validation failed", issues: parsed.error.issues },
+        { status: 400 }
+      )
+    }
+
+    const { id, per_100g } = parsed.data
+
+    const { data, error } = await supabase
+      .from("food_catalog")
+      .update({ per_100g })
+      .eq("id", id)
+      .eq("user_id", userId)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json({ data })
+  } catch (error) {
+    console.error("[PATCH /api/nutrition/save]", error)
+    return errorResponse("Failed to update food nutrition", 500)
   }
 }

@@ -94,6 +94,34 @@ export function ExerciseTab() {
     }
   }, []);
 
+  // Load today's completed sessions from DB on mount
+  useEffect(() => {
+    async function loadTodaySessions() {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch(`/api/exercise?from=${today}T00:00:00&to=${today}T23:59:59`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data && data.length > 0) {
+            const sessions: CompletedSession[] = data
+              .filter((s: { duration_minutes: number | null }) => s.duration_minutes != null)
+              .map((s: { id: string; exercise_type: string; duration_minutes: number; started_at: string }) => {
+                const typeInfo = EXERCISE_TYPES.find(ex => ex.id === s.exercise_type);
+                return {
+                  id: s.id,
+                  exerciseType: typeInfo?.label || s.exercise_type,
+                  durationMinutes: s.duration_minutes,
+                  completedAt: s.started_at,
+                };
+              });
+            setCompletedToday(sessions);
+          }
+        }
+      } catch {}
+    }
+    loadTodaySessions();
+  }, []);
+
   // Timer tick
   useEffect(() => {
     if (activeTimer && !isPaused) {

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Home, Dumbbell, Scale, Heart, TrendingUp, Bell, User, LogOut } from "lucide-react";
+import { Home, Dumbbell, Scale, Heart, TrendingUp, Bell, User, LogOut, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth";
 import { HomeTab } from "@/components/tabs/home-tab";
+import { NutritionTab } from "@/components/tabs/nutrition-tab";
 import { ExerciseTab } from "@/components/tabs/exercise-tab";
 import { BodyTab } from "@/components/tabs/body-tab";
 import { HealthTab } from "@/components/tabs/health-tab";
@@ -13,6 +14,7 @@ import { ExerciseSessionProvider, useExerciseSession } from "@/contexts/exercise
 
 const tabs = [
   { id: "home", label: "Home", icon: Home },
+  { id: "nutrition", label: "Nutrition", icon: UtensilsCrossed },
   { id: "exercise", label: "Exercise", icon: Dumbbell },
   { id: "body", label: "Body", icon: Scale },
   { id: "health", label: "Health", icon: Heart },
@@ -136,6 +138,9 @@ export function AppShell() {
         <div className="container mx-auto px-4 py-4 max-w-5xl">
           <div className={activeTab === "home" ? "" : "hidden"}>
             <HomeTab onNavigate={setActiveTab} />
+          </div>
+          <div className={activeTab === "nutrition" ? "" : "hidden"}>
+            <NutritionTab />
           </div>
           <div className={activeTab === "exercise" ? "" : "hidden"}>
             <ExerciseTab />

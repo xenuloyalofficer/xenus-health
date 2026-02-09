@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import {
-  Activity, Moon, Dumbbell, Utensils, Pill, Zap, Ruler,
+  Activity, Moon, Dumbbell, Utensils, Pill, Zap, Ruler, Droplets,
   ChevronRight, Clock, TrendingUp, TrendingDown, Minus, Flame,
   ChevronDown
 } from "lucide-react";
@@ -25,6 +25,7 @@ interface DailySummary {
   mood: { energy_level: number; mood_level: number } | null
   measurements: Record<string, unknown> | null
   checklist: { completion_pct: number; momentum_score: number } | null
+  water_total_ml?: number
 }
 
 interface WeeklyTrends {
@@ -52,7 +53,8 @@ function buildChecklist(summary: DailySummary | null): ChecklistItem[] {
       { id: "weight", label: "Weight", icon: Activity, status: "optional", detail: null, tab: "body" },
       { id: "meds", label: "Meds", icon: Pill, status: "pending", detail: null, tab: "health" },
       { id: "exercise", label: "Exercise", icon: Dumbbell, status: "pending", detail: null, tab: "exercise" },
-      { id: "food", label: "Food", icon: Utensils, status: "pending", detail: null, tab: "health" },
+      { id: "food", label: "Food", icon: Utensils, status: "pending", detail: null, tab: "nutrition" },
+      { id: "water", label: "Water", icon: Droplets, status: "pending", detail: null, tab: "nutrition" },
       { id: "energy", label: "Energy/Mood", icon: Zap, status: "pending", detail: null, tab: "health" },
       { id: "measurements", label: "Measurements", icon: Ruler, status: "optional", detail: "Weekly", tab: "body" },
     ]
@@ -96,7 +98,15 @@ function buildChecklist(summary: DailySummary | null): ChecklistItem[] {
       detail: summary.food.entries.length > 0
         ? `${summary.food.entries.length} entries, ${Math.round(summary.food.totals.calories)} cal`
         : null,
-      tab: "health",
+      tab: "nutrition",
+    },
+    {
+      id: "water", label: "Water", icon: Droplets,
+      status: (summary.water_total_ml ?? 0) >= 2000 ? "logged" : (summary.water_total_ml ?? 0) > 0 ? "partial" : "pending",
+      detail: (summary.water_total_ml ?? 0) > 0
+        ? `${((summary.water_total_ml ?? 0) / 1000).toFixed(1)}L`
+        : null,
+      tab: "nutrition",
     },
     {
       id: "energy", label: "Energy/Mood", icon: Zap,
@@ -139,13 +149,19 @@ export function HomeTab({ onNavigate }: HomeTabProps) {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [summaryRes, trendsRes] = await Promise.allSettled([
+        const [summaryRes, trendsRes, waterRes] = await Promise.allSettled([
           fetch("/api/daily-summary").then((r) => r.json()),
           fetch("/api/weekly-trends").then((r) => r.json()),
+          fetch("/api/water").then((r) => r.json()),
         ])
 
         if (summaryRes.status === "fulfilled" && summaryRes.value?.data) {
-          setSummary(summaryRes.value.data)
+          const summaryData = summaryRes.value.data;
+          // Inject water total from separate fetch
+          if (waterRes.status === "fulfilled" && waterRes.value?.total_ml != null) {
+            summaryData.water_total_ml = waterRes.value.total_ml;
+          }
+          setSummary(summaryData)
         }
         if (trendsRes.status === "fulfilled" && trendsRes.value?.data) {
           setTrends(trendsRes.value.data)
@@ -301,7 +317,7 @@ export function HomeTab({ onNavigate }: HomeTabProps) {
           value={caloriesValue}
           label="Calories"
           icon={Flame}
-          onClick={() => onNavigate("health")}
+          onClick={() => onNavigate("nutrition")}
         />
       </div>
 

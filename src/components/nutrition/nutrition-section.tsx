@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Utensils, Search, X, Minus, Plus, Trash2, Pencil } from "lucide-react";
+import { Utensils, Search, X, Minus, Plus, Trash2, Pencil, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,10 +55,21 @@ interface TodayData {
   entry_count: number;
 }
 
-const CALORIE_GOAL = 2000;
-const PROTEIN_GOAL = 150; // grams
-const FAT_GOAL = 65; // grams
-const CARBS_GOAL = 250; // grams
+const DEFAULT_GOALS = { calories: 2000, protein_g: 150, fat_g: 65, carbs_g: 250 };
+const GOALS_STORAGE_KEY = "health-os-nutrition-goals";
+
+function loadGoals(): typeof DEFAULT_GOALS {
+  if (typeof window === "undefined") return DEFAULT_GOALS;
+  try {
+    const stored = localStorage.getItem(GOALS_STORAGE_KEY);
+    if (stored) return { ...DEFAULT_GOALS, ...JSON.parse(stored) };
+  } catch {}
+  return DEFAULT_GOALS;
+}
+
+function saveGoals(goals: typeof DEFAULT_GOALS) {
+  try { localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(goals)); } catch {}
+}
 
 const MEAL_ORDER = ["breakfast", "lunch", "dinner", "snack"] as const;
 const MEAL_LABELS: Record<string, string> = {
@@ -75,6 +86,13 @@ const MEAL_ICONS: Record<string, string> = {
 };
 
 export function NutritionSection() {
+  // Goals state
+  const [goals, setGoals] = useState(DEFAULT_GOALS);
+  const [showGoals, setShowGoals] = useState(false);
+
+  // Load goals from localStorage
+  useEffect(() => { setGoals(loadGoals()); }, []);
+
   // Today's data
   const [todayData, setTodayData] = useState<TodayData | null>(null);
   const [todayLoading, setTodayLoading] = useState(true);
@@ -394,8 +412,20 @@ export function NutritionSection() {
     // Update local state immediately
     setSelectedFood({ ...selectedFood, per_100g: updatedPer100g });
     setEditingNutrition(false);
-    toast.success("Nutrition updated");
     medium();
+
+    // Persist to database
+    try {
+      const res = await fetch("/api/nutrition/save", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedFood.id, per_100g: updatedPer100g }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      toast.success("Nutrition saved");
+    } catch {
+      toast.error("Nutrition updated locally but failed to save to database");
+    }
   };
 
   // --- Computed values ---
@@ -405,10 +435,10 @@ export function NutritionSection() {
     total_fat_g: 0,
     total_carbs_g: 0,
   };
-  const calPct = Math.min(Math.round((totals.total_calories / CALORIE_GOAL) * 100), 100);
-  const proteinPct = Math.min(Math.round((totals.total_protein_g / PROTEIN_GOAL) * 100), 100);
-  const fatPct = Math.min(Math.round((totals.total_fat_g / FAT_GOAL) * 100), 100);
-  const carbsPct = Math.min(Math.round((totals.total_carbs_g / CARBS_GOAL) * 100), 100);
+  const calPct = Math.min(Math.round((totals.total_calories / goals.calories) * 100), 100);
+  const proteinPct = Math.min(Math.round((totals.total_protein_g / goals.protein_g) * 100), 100);
+  const fatPct = Math.min(Math.round((totals.total_fat_g / goals.fat_g) * 100), 100);
+  const carbsPct = Math.min(Math.round((totals.total_carbs_g / goals.carbs_g) * 100), 100);
 
   // Preview nutrition for selected food at current portion
   const previewCal = selectedFood?.per_100g?.calories != null
@@ -429,17 +459,93 @@ export function NutritionSection() {
   return (
     <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center">
-          <Utensils className="w-6 h-6 text-white" />
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center">
+            <Utensils className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="font-bold text-lg">Nutrition</h2>
+            <p className="text-sm text-muted-foreground">
+              {totals.total_calories} / {goals.calories} cal
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-bold text-lg">Nutrition</h2>
-          <p className="text-sm text-muted-foreground">
-            {totals.total_calories} / {CALORIE_GOAL} cal
-          </p>
-        </div>
+        <button
+          onClick={() => setShowGoals(!showGoals)}
+          className={cn(
+            "w-9 h-9 rounded-full flex items-center justify-center transition-colors",
+            showGoals ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80"
+          )}
+        >
+          <Settings className="w-4 h-4" />
+        </button>
       </div>
+
+      {/* Goals Settings */}
+      {showGoals && (
+        <div className="bg-secondary/50 rounded-2xl p-4 mb-5 space-y-3">
+          <p className="text-sm font-semibold">Daily Goals</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Calories</Label>
+              <Input
+                type="number"
+                value={goals.calories}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10) || 0;
+                  const updated = { ...goals, calories: v };
+                  setGoals(updated);
+                  saveGoals(updated);
+                }}
+                className="h-10 rounded-xl mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Protein (g)</Label>
+              <Input
+                type="number"
+                value={goals.protein_g}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10) || 0;
+                  const updated = { ...goals, protein_g: v };
+                  setGoals(updated);
+                  saveGoals(updated);
+                }}
+                className="h-10 rounded-xl mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Fat (g)</Label>
+              <Input
+                type="number"
+                value={goals.fat_g}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10) || 0;
+                  const updated = { ...goals, fat_g: v };
+                  setGoals(updated);
+                  saveGoals(updated);
+                }}
+                className="h-10 rounded-xl mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Carbs (g)</Label>
+              <Input
+                type="number"
+                value={goals.carbs_g}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value, 10) || 0;
+                  const updated = { ...goals, carbs_g: v };
+                  setGoals(updated);
+                  saveGoals(updated);
+                }}
+                className="h-10 rounded-xl mt-1"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Today's Summary */}
       <div className="flex items-center gap-6 mb-6">
@@ -464,7 +570,7 @@ export function NutritionSection() {
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="font-medium">Protein</span>
-              <span className="text-muted-foreground">{totals.total_protein_g}g / {PROTEIN_GOAL}g</span>
+              <span className="text-muted-foreground">{totals.total_protein_g}g / {goals.protein_g}g</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div
@@ -477,7 +583,7 @@ export function NutritionSection() {
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="font-medium">Fat</span>
-              <span className="text-muted-foreground">{totals.total_fat_g}g / {FAT_GOAL}g</span>
+              <span className="text-muted-foreground">{totals.total_fat_g}g / {goals.fat_g}g</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div
@@ -490,7 +596,7 @@ export function NutritionSection() {
           <div>
             <div className="flex justify-between text-xs mb-1">
               <span className="font-medium">Carbs</span>
-              <span className="text-muted-foreground">{totals.total_carbs_g}g / {CARBS_GOAL}g</span>
+              <span className="text-muted-foreground">{totals.total_carbs_g}g / {goals.carbs_g}g</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
               <div

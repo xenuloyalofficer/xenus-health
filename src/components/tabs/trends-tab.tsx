@@ -6,7 +6,7 @@ import {
   ReferenceLine, Cell,
 } from "recharts";
 import {
-  TrendingUp, TrendingDown, Minus, Moon, Dumbbell, Utensils, Zap, Scale, Activity, Calendar
+  TrendingUp, TrendingDown, Minus, Moon, Dumbbell, Utensils, Zap, Scale, Activity, Calendar, FlaskConical, Droplets,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,12 +44,26 @@ interface MoodEntry {
   mood: number;
 }
 
+interface BloodWorkMarkerTrend {
+  marker_name: string;
+  unit: string;
+  ref_range_low: number | null;
+  ref_range_high: number | null;
+  points: { date: string; value: number }[];
+}
+
+interface WaterDay {
+  date: string;
+  total_ml: number;
+}
+
 interface TrendsData {
   weight: WeightEntry[];
   sleep: SleepEntry[];
   nutrition: NutritionDay[];
   exercise: ExerciseEntry[];
   mood: MoodEntry[];
+  water?: WaterDay[];
 }
 
 type TimeRange = 7 | 14 | 30;
@@ -135,8 +149,18 @@ function CorrelationCard({
   );
 }
 
+const KEY_BLOOD_MARKERS = ["Total Cholesterol", "HDL Cholesterol", "LDL Cholesterol", "Triglycerides", "Glucose (Fasting)"];
+const BLOOD_MARKER_COLORS: Record<string, string> = {
+  "Total Cholesterol": "#ef4444",
+  "HDL Cholesterol": "#22c55e",
+  "LDL Cholesterol": "#f97316",
+  "Triglycerides": "#8b5cf6",
+  "Glucose (Fasting)": "#3b82f6",
+};
+
 export function TrendsTab() {
   const [data, setData] = useState<TrendsData | null>(null);
+  const [bloodMarkers, setBloodMarkers] = useState<BloodWorkMarkerTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<TimeRange>(14);
 
@@ -144,10 +168,47 @@ export function TrendsTab() {
     async function fetchTrends() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/trends?days=${range}`);
-        if (res.ok) {
-          const json = await res.json();
+        const [trendsRes, bloodRes] = await Promise.all([
+          fetch(`/api/trends?days=${range}`),
+          fetch("/api/blood-work?limit=50"),
+        ]);
+        if (trendsRes.ok) {
+          const json = await trendsRes.json();
           setData(json.data);
+        }
+        if (bloodRes.ok) {
+          const { data: panels } = await bloodRes.json();
+          if (panels && panels.length > 0) {
+            // Build marker trends from panels
+            const markerMap: Record<string, BloodWorkMarkerTrend> = {};
+            const sorted = [...panels].sort(
+              (a: { test_date: string }, b: { test_date: string }) =>
+                new Date(a.test_date).getTime() - new Date(b.test_date).getTime()
+            );
+            for (const panel of sorted) {
+              for (const result of panel.blood_work_results || []) {
+                if (!KEY_BLOOD_MARKERS.includes(result.marker_name)) continue;
+                if (!markerMap[result.marker_name]) {
+                  markerMap[result.marker_name] = {
+                    marker_name: result.marker_name,
+                    unit: result.unit,
+                    ref_range_low: result.ref_range_low,
+                    ref_range_high: result.ref_range_high,
+                    points: [],
+                  };
+                }
+                markerMap[result.marker_name].points.push({
+                  date: panel.test_date,
+                  value: result.value,
+                });
+              }
+            }
+            setBloodMarkers(
+              KEY_BLOOD_MARKERS
+                .filter((m) => markerMap[m] && markerMap[m].points.length >= 1)
+                .map((m) => markerMap[m])
+            );
+          }
         }
       } catch (err) {
         console.error("Failed to fetch trends:", err);
@@ -606,6 +667,139 @@ export function TrendsTab() {
               <div className="flex justify-center gap-6 mt-3 text-xs">
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#f59e0b]" />Energy</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-[#8b5cf6]" />Mood</span>
+              </div>
+            </div>
+          )}
+
+          {/* Water Chart */}
+          {data.water && data.water.length >= 2 && (
+            <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center">
+                    <Droplets className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold">Water</h3>
+                    <p className="text-xs text-muted-foreground">{data.water.length} days</p>
+                  </div>
+                </div>
+              </div>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.water} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={formatDateShort}
+                      tick={{ fontSize: 11, fill: "#888" }}
+                      axisLine={false}
+                      tickLine={false}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis tick={{ fontSize: 11, fill: "#888" }} axisLine={false} tickLine={false} width={40} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}
+                      formatter={(value) => [`${value} ml`, "Water"]}
+                      labelFormatter={(label) => formatDateShort(String(label))}
+                    />
+                    <ReferenceLine y={2000} stroke="#22c55e" strokeDasharray="4 4" strokeOpacity={0.6} />
+                    <Bar dataKey="total_ml" radius={[6, 6, 0, 0]}>
+                      {data.water.map((entry, idx) => {
+                        const ml = entry.total_ml;
+                        const color = ml < 1000 ? "#ef4444" : ml < 2000 ? "#eab308" : "#22c55e";
+                        return <Cell key={idx} fill={color} />;
+                      })}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Blood Work Charts */}
+          {bloodMarkers.length > 0 && (
+            <div className="bg-card rounded-3xl border-2 border-foreground/5 p-5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-purple-500 flex items-center justify-center">
+                  <FlaskConical className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold">Blood Work</h3>
+                  <p className="text-xs text-muted-foreground">Key markers over time</p>
+                </div>
+              </div>
+              <div className="space-y-6">
+                {bloodMarkers.map((marker) => {
+                  const color = BLOOD_MARKER_COLORS[marker.marker_name] || "#8b5cf6";
+                  return (
+                    <div key={marker.marker_name}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-semibold">{marker.marker_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {marker.points[marker.points.length - 1]?.value} {marker.unit}
+                        </p>
+                      </div>
+                      {marker.points.length >= 2 ? (
+                        <div className="h-36">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={marker.points} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
+                              <XAxis
+                                dataKey="date"
+                                tickFormatter={formatDateShort}
+                                tick={{ fontSize: 10, fill: "#888" }}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                domain={["dataMin - 10", "dataMax + 10"]}
+                                tick={{ fontSize: 10, fill: "#888" }}
+                                axisLine={false}
+                                tickLine={false}
+                                width={40}
+                              />
+                              <Tooltip
+                                contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}
+                                formatter={(value) => [`${value} ${marker.unit}`, marker.marker_name]}
+                                labelFormatter={(label) => formatDateShort(String(label))}
+                              />
+                              {marker.ref_range_high != null && (
+                                <ReferenceLine
+                                  y={marker.ref_range_high}
+                                  stroke="#ef4444"
+                                  strokeDasharray="4 4"
+                                  strokeOpacity={0.5}
+                                />
+                              )}
+                              {marker.ref_range_low != null && marker.ref_range_low > 0 && (
+                                <ReferenceLine
+                                  y={marker.ref_range_low}
+                                  stroke="#f59e0b"
+                                  strokeDasharray="4 4"
+                                  strokeOpacity={0.5}
+                                />
+                              )}
+                              <Line
+                                type="monotone"
+                                dataKey="value"
+                                stroke={color}
+                                strokeWidth={3}
+                                dot={{ r: 5, fill: color, strokeWidth: 2, stroke: "#fff" }}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 py-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                          <p className="text-sm tabular-nums font-medium">{marker.points[0]?.value} {marker.unit}</p>
+                          <p className="text-xs text-muted-foreground">(1 data point — need more for chart)</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

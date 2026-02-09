@@ -371,6 +371,7 @@ export function BloodWorkSection() {
       {detailPanel && (
         <PanelDetailDialog
           panel={detailPanel}
+          allPanels={panels}
           onClose={() => setDetailPanel(null)}
           onDelete={handleDelete}
           onChartMarker={(m) => { setChartMarker(m); setDetailPanel(null); }}
@@ -395,13 +396,57 @@ export function BloodWorkSection() {
 
 // --- Panel Detail Dialog ---
 
+function getComparisonArrow(
+  markerName: string,
+  currentValue: number,
+  currentPanel: BloodWorkPanel,
+  allPanels: BloodWorkPanel[],
+  refLow: number | null,
+  refHigh: number | null,
+): { icon: typeof TrendingUp | typeof TrendingDown | null; color: string; label: string } | null {
+  // Find previous panel (sorted by date desc, so next in array)
+  const sorted = [...allPanels].sort((a, b) => new Date(b.test_date).getTime() - new Date(a.test_date).getTime());
+  const currentIdx = sorted.findIndex((p) => p.id === currentPanel.id);
+  if (currentIdx < 0 || currentIdx >= sorted.length - 1) return null;
+
+  const prevPanel = sorted[currentIdx + 1];
+  const prevResult = prevPanel.blood_work_results.find((r) => r.marker_name === markerName);
+  if (!prevResult) return null;
+
+  const diff = currentValue - prevResult.value;
+  const pctChange = prevResult.value !== 0 ? Math.abs(diff / prevResult.value) * 100 : 0;
+
+  // Within 5% = stable
+  if (pctChange <= 5) return { icon: null, color: "text-gray-400", label: "→" };
+
+  // Determine if change is improving or worsening
+  const midRef = refLow != null && refHigh != null ? (refLow + refHigh) / 2 : null;
+  const movingTowardNormal = midRef != null
+    ? Math.abs(currentValue - midRef) < Math.abs(prevResult.value - midRef)
+    : false;
+
+  if (diff > 0) {
+    // Value increased
+    return movingTowardNormal
+      ? { icon: TrendingUp, color: "text-green-500", label: "↑" }
+      : { icon: TrendingUp, color: "text-red-500", label: "↑" };
+  } else {
+    // Value decreased
+    return movingTowardNormal
+      ? { icon: TrendingDown, color: "text-green-500", label: "↓" }
+      : { icon: TrendingDown, color: "text-red-500", label: "↓" };
+  }
+}
+
 function PanelDetailDialog({
   panel,
+  allPanels,
   onClose,
   onDelete,
   onChartMarker,
 }: {
   panel: BloodWorkPanel;
+  allPanels: BloodWorkPanel[];
   onClose: () => void;
   onDelete: (id: string) => void;
   onChartMarker: (marker: string) => void;
@@ -442,6 +487,7 @@ function PanelDetailDialog({
               <div className="space-y-1.5">
                 {grouped[category].map((r) => {
                   const badge = flagBadge(r.flag);
+                  const arrow = getComparisonArrow(r.marker_name, r.value, panel, allPanels, r.ref_range_low, r.ref_range_high);
                   return (
                     <button
                       key={r.id}
@@ -458,14 +504,19 @@ function PanelDetailDialog({
                           Ref: {r.ref_range_low ?? "—"} – {r.ref_range_high ?? "—"} {r.unit}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-lg tabular-nums">{r.value}</p>
-                        <span className={cn(
-                          "inline-block px-2 py-0.5 rounded-full text-[10px] font-bold text-white",
-                          badge.bg
-                        )}>
-                          {badge.label}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        {arrow && (
+                          <span className={cn("text-lg font-bold", arrow.color)}>{arrow.label}</span>
+                        )}
+                        <div className="text-right">
+                          <p className="font-bold text-lg tabular-nums">{r.value}</p>
+                          <span className={cn(
+                            "inline-block px-2 py-0.5 rounded-full text-[10px] font-bold text-white",
+                            badge.bg
+                          )}>
+                            {badge.label}
+                          </span>
+                        </div>
                       </div>
                     </button>
                   );
