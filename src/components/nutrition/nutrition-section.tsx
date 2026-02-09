@@ -122,6 +122,10 @@ export function NutritionSection() {
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null);
   const [editEntryPortionG, setEditEntryPortionG] = useState(100);
   const [editEntryMealType, setEditEntryMealType] = useState<string>("breakfast");
+  const [editEntryCal, setEditEntryCal] = useState("");
+  const [editEntryProtein, setEditEntryProtein] = useState("");
+  const [editEntryFat, setEditEntryFat] = useState("");
+  const [editEntryCarbs, setEditEntryCarbs] = useState("");
   const [editEntrySaving, setEditEntrySaving] = useState(false);
 
   // Custom food form state
@@ -307,19 +311,23 @@ export function NutritionSection() {
     setEditingEntry(entry);
     setEditEntryPortionG(entry.portion_g);
     setEditEntryMealType(entry.meal_type || "snack");
+    setEditEntryCal(String(Math.round(entry.nutrition_snapshot?.calories ?? 0)));
+    setEditEntryProtein(String(Math.round((entry.nutrition_snapshot?.protein_g ?? 0) as number * 10) / 10));
+    setEditEntryFat(String(Math.round((entry.nutrition_snapshot?.fat_g ?? 0) as number * 10) / 10));
+    setEditEntryCarbs(String(Math.round((entry.nutrition_snapshot?.carbs_g ?? 0) as number * 10) / 10));
   };
 
   const handleSaveEditEntry = async () => {
     if (!editingEntry) return;
     setEditEntrySaving(true);
     try {
-      // Recalculate nutrition snapshot based on new portion
-      const ratio = editEntryPortionG / editingEntry.portion_g;
-      const oldSnap = editingEntry.nutrition_snapshot || {};
-      const newSnap: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(oldSnap)) {
-        newSnap[key] = typeof val === "number" ? Math.round(val * ratio * 10) / 10 : val;
-      }
+      const newSnap: Record<string, unknown> = {
+        ...editingEntry.nutrition_snapshot,
+        calories: parseFloat(editEntryCal) || 0,
+        protein_g: parseFloat(editEntryProtein) || 0,
+        fat_g: parseFloat(editEntryFat) || 0,
+        carbs_g: parseFloat(editEntryCarbs) || 0,
+      };
 
       const res = await fetch("/api/food", {
         method: "PATCH",
@@ -1128,6 +1136,27 @@ export function NutritionSection() {
                                 {mt}
                               </button>
                             ))}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium">Nutrition</Label>
+                          <div className="grid grid-cols-4 gap-1.5 mt-1">
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">Cal</Label>
+                              <Input type="number" min="0" value={editEntryCal} onChange={(e) => setEditEntryCal(e.target.value)} className="h-8 rounded-lg text-xs text-center" />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">Protein</Label>
+                              <Input type="number" min="0" step="0.1" value={editEntryProtein} onChange={(e) => setEditEntryProtein(e.target.value)} className="h-8 rounded-lg text-xs text-center" />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">Fat</Label>
+                              <Input type="number" min="0" step="0.1" value={editEntryFat} onChange={(e) => setEditEntryFat(e.target.value)} className="h-8 rounded-lg text-xs text-center" />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">Carbs</Label>
+                              <Input type="number" min="0" step="0.1" value={editEntryCarbs} onChange={(e) => setEditEntryCarbs(e.target.value)} className="h-8 rounded-lg text-xs text-center" />
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-2">
