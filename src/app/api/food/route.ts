@@ -76,6 +76,36 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// --- DELETE: Remove a food entry ---
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClientServer()
+    const userId = await getAuthUserId(supabase)
+    if (!userId) return errorResponse("Unauthorized", 401)
+
+    const body = await request.json()
+    const id = body?.id
+    if (!id || typeof id !== "string") return errorResponse("Invalid id", 400)
+
+    const { error } = await supabase
+      .from("food_entries")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", userId)
+
+    if (error) {
+      if (error.code === "PGRST116") return errorResponse("Entry not found", 404)
+      throw error
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("[DELETE /api/food]", error)
+    return errorResponse("Failed to delete food entry", 500)
+  }
+}
+
 // --- POST: Create a food entry ---
 
 export async function POST(request: NextRequest) {

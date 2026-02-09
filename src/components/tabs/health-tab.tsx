@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Moon, Pill, Utensils, Zap, Plus, Search, Check, X, Sun, Star, Coffee, Battery, Smile, Meh, Frown, Clock, AlertTriangle } from "lucide-react";
+import { Moon, Pill, Zap, Plus, Check, X, Battery, Smile, Meh, Frown, Clock, AlertTriangle } from "lucide-react";
+import { NutritionSection } from "@/components/nutrition/nutrition-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CircularProgress } from "@/components/ui/circular-progress";
 import { toast } from "sonner";
-import { shouldShowSleepButton, getDefaultMealType } from "@/lib/time-awareness";
+import { shouldShowSleepButton } from "@/lib/time-awareness";
 import { medium, success } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
@@ -65,14 +65,6 @@ interface MedicationPreset {
   dosage: string | null;
 }
 
-interface FoodSearchItem {
-  id?: string;
-  name: string;
-  default_portion_g: number | null;
-  per_100g: { calories?: number | null; protein_g?: number | null };
-  source?: string;
-}
-
 export function HealthTab() {
   // Sleep state
   const [sleepState, setSleepState] = useState<SleepTrackingState>(
@@ -94,17 +86,6 @@ export function HealthTab() {
   const [newMedDosage, setNewMedDosage] = useState("");
   const [newMedSchedule, setNewMedSchedule] = useState<string[]>(["morning"]);
   const [medLoading, setMedLoading] = useState(false);
-
-  // Food state
-  const [foodQuery, setFoodQuery] = useState("");
-  const [foodResults, setFoodResults] = useState<{ personal: FoodSearchItem[]; usda: FoodSearchItem[]; openfoodfacts: FoodSearchItem[] } | null>(null);
-  const [foodSearching, setFoodSearching] = useState(false);
-  const [selectedFood, setSelectedFood] = useState<FoodSearchItem | null>(null);
-  const [portionG, setPortionG] = useState("");
-  const [mealType, setMealType] = useState<string>(getDefaultMealType());
-  const [foodLoading, setFoodLoading] = useState(false);
-  const [todayCalories, setTodayCalories] = useState(0);
-  const calorieGoal = 2000;
 
   // Energy/Mood state
   const [energyLevel, setEnergyLevel] = useState<number | null>(null);
@@ -158,22 +139,6 @@ export function HealthTab() {
       setMedPresetsLoading(false);
     }
     loadPresets();
-  }, []);
-
-  // Load today's calories
-  useEffect(() => {
-    async function loadCalories() {
-      try {
-        const res = await fetch("/api/daily-summary");
-        if (res.ok) {
-          const { data } = await res.json();
-          if (data?.food?.totals?.calories) {
-            setTodayCalories(Math.round(data.food.totals.calories));
-          }
-        }
-      } catch {}
-    }
-    loadCalories();
   }, []);
 
   const updateSleepState = useCallback((update: Partial<SleepTrackingState>) => {
@@ -341,77 +306,6 @@ export function HealthTab() {
       toast.error(err instanceof Error ? err.message : "Failed to add");
     } finally {
       setMedLoading(false);
-    }
-  };
-
-  // --- Food handlers ---
-  useEffect(() => {
-    if (foodQuery.length < 2) {
-      setFoodResults(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setFoodSearching(true);
-      try {
-        const res = await fetch(`/api/nutrition/search?q=${encodeURIComponent(foodQuery)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setFoodResults(data);
-        }
-      } catch {}
-      setFoodSearching(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [foodQuery]);
-
-  const handleSelectFood = async (item: FoodSearchItem) => {
-    setSelectedFood(item);
-    setPortionG(String(item.default_portion_g || 100));
-
-    if (!item.id && (item.source === "usda" || item.source === "openfoodfacts")) {
-      try {
-        const res = await fetch("/api/nutrition/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(item),
-        });
-        if (res.ok) {
-          const { data } = await res.json();
-          setSelectedFood({ ...item, id: data.id });
-        }
-      } catch {}
-    }
-  };
-
-  const handleLogFood = async () => {
-    if (!selectedFood?.id || !portionG) return;
-    setFoodLoading(true);
-    try {
-      const res = await fetch("/api/nutrition/log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          food_catalog_id: selectedFood.id,
-          portion_g: parseFloat(portionG),
-          meal_type: mealType,
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to log food");
-      
-      const calories = selectedFood.per_100g?.calories 
-        ? Math.round(selectedFood.per_100g.calories * parseFloat(portionG) / 100)
-        : 0;
-      setTodayCalories(prev => prev + calories);
-      
-      toast.success(`${selectedFood.name} logged`);
-      medium();
-      setSelectedFood(null);
-      setFoodQuery("");
-      setFoodResults(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to log food");
-    } finally {
-      setFoodLoading(false);
     }
   };
 
@@ -692,136 +586,8 @@ export function HealthTab() {
         )}
       </div>
 
-      {/* Food / Calories Card */}
-      <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-orange-500 flex items-center justify-center">
-              <Utensils className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="font-bold text-lg">Nutrition</h2>
-              <p className="text-sm text-muted-foreground">{todayCalories} / {calorieGoal} cal</p>
-            </div>
-          </div>
-          <div className="relative">
-            <CircularProgress 
-              value={(todayCalories / calorieGoal) * 100} 
-              size={70} 
-              strokeWidth={8}
-              color="#f97316"
-            >
-              <span className="text-xs font-bold">{Math.round((todayCalories / calorieGoal) * 100)}%</span>
-            </CircularProgress>
-          </div>
-        </div>
-
-        {/* Food Search */}
-        <div className="relative mb-3">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            className="pl-12 h-14 rounded-xl text-base"
-            placeholder="Search foods..."
-            value={foodQuery}
-            onChange={(e) => setFoodQuery(e.target.value)}
-          />
-        </div>
-
-        {foodSearching && <p className="text-sm text-muted-foreground">Searching...</p>}
-
-        {/* Search Results */}
-        {foodResults && !selectedFood && (
-          <div className="max-h-48 overflow-y-auto space-y-1 -mx-2 px-2">
-            {foodResults.personal.length > 0 && (
-              <>
-                <p className="text-xs font-bold text-muted-foreground uppercase mt-2 mb-1">Your Foods</p>
-                {foodResults.personal.map((item, i) => (
-                  <button
-                    key={`p-${i}`}
-                    className="w-full text-left p-3 rounded-xl hover:bg-secondary transition-colors flex justify-between items-center"
-                    onClick={() => handleSelectFood(item)}
-                  >
-                    <span className="font-medium">{item.name}</span>
-                    <span className="text-muted-foreground text-sm">{item.per_100g?.calories ?? "?"} cal/100g</span>
-                  </button>
-                ))}
-              </>
-            )}
-            {foodResults.usda.length > 0 && (
-              <>
-                <p className="text-xs font-bold text-muted-foreground uppercase mt-2 mb-1">USDA Database</p>
-                {foodResults.usda.map((item, i) => (
-                  <button
-                    key={`u-${i}`}
-                    className="w-full text-left p-3 rounded-xl hover:bg-secondary transition-colors flex justify-between items-center"
-                    onClick={() => handleSelectFood(item)}
-                  >
-                    <span className="font-medium">{item.name}</span>
-                    <span className="text-muted-foreground text-sm">{item.per_100g?.calories ?? "?"} cal/100g</span>
-                  </button>
-                ))}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Selected Food */}
-        {selectedFood && (
-          <div className="mt-3 bg-secondary/50 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="font-bold">{selectedFood.name}</p>
-              <button onClick={() => setSelectedFood(null)} className="p-1 rounded-lg hover:bg-secondary">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <Label className="text-xs">Portion (g)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={portionG}
-                  onChange={(e) => setPortionG(e.target.value)}
-                  className="h-12 rounded-xl mt-1"
-                />
-              </div>
-              <div className="flex gap-1 pt-6">
-                <Button variant="outline" size="sm" onClick={() => setPortionG("100")} className="rounded-lg">100g</Button>
-                <Button variant="outline" size="sm" onClick={() => setPortionG("200")} className="rounded-lg">200g</Button>
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-xs">Meal</Label>
-              <div className="flex gap-2 mt-1">
-                {["breakfast", "lunch", "dinner", "snack"].map((mt) => (
-                  <button
-                    key={mt}
-                    onClick={() => setMealType(mt)}
-                    className={cn(
-                      "flex-1 py-2 rounded-xl text-sm font-medium capitalize transition-colors",
-                      mealType === mt ? "bg-primary text-primary-foreground" : "bg-secondary hover:bg-secondary/80"
-                    )}
-                  >
-                    {mt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {portionG && selectedFood.per_100g?.calories != null && (
-              <p className="text-center font-bold text-lg">
-                = {Math.round(selectedFood.per_100g.calories * parseFloat(portionG) / 100)} calories
-              </p>
-            )}
-
-            <Button onClick={handleLogFood} disabled={foodLoading} className="w-full h-12 rounded-xl font-bold">
-              {foodLoading ? "Saving..." : "Log Food"}
-            </Button>
-          </div>
-        )}
-      </div>
+      {/* Nutrition Section (search, log, today's entries) */}
+      <NutritionSection />
 
       {/* Medications Card */}
       <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">
