@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Home, Dumbbell, Scale, Heart, TrendingUp, Bell, User } from "lucide-react";
+import { Home, Dumbbell, Scale, Heart, TrendingUp, Bell, User, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HomeTab } from "@/components/tabs/home-tab";
 import { ExerciseTab } from "@/components/tabs/exercise-tab";
 import { BodyTab } from "@/components/tabs/body-tab";
 import { HealthTab } from "@/components/tabs/health-tab";
 import { TrendsTab } from "@/components/tabs/trends-tab";
+import { ExerciseSessionProvider, useExerciseSession } from "@/contexts/exercise-session";
 
 const tabs = [
   { id: "home", label: "Home", icon: Home },
@@ -19,10 +20,33 @@ const tabs = [
 
 export type TabId = (typeof tabs)[number]["id"];
 
+function formatTimerDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function ActiveSessionBar({ onNavigate }: { onNavigate: (tab: TabId) => void }) {
+  const { activeTimer, elapsed } = useExerciseSession();
+  if (!activeTimer) return null;
+
+  return (
+    <button
+      onClick={() => onNavigate("exercise")}
+      className="fixed bottom-24 md:bottom-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 px-4 py-2.5 bg-primary rounded-full border-2 border-foreground/10 shadow-[0_4px_20px_rgba(0,0,0,0.15)] hover:shadow-[0_6px_24px_rgba(0,0,0,0.2)] transition-all"
+    >
+      <Dumbbell className="w-4 h-4 text-primary-foreground" />
+      <span className="text-sm font-bold text-primary-foreground">{activeTimer.exerciseType}</span>
+      <span className="text-sm font-mono font-bold text-primary-foreground tabular-nums">{formatTimerDuration(elapsed)}</span>
+    </button>
+  );
+}
+
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
 
   return (
+    <ExerciseSessionProvider>
     <div className="min-h-screen flex flex-col bg-background">
       {/* Desktop header */}
       <header className="hidden md:block sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-foreground/5">
@@ -105,6 +129,9 @@ export function AppShell() {
         })}
       </nav>
 
+      {/* Active exercise session bar — visible on all pages */}
+      <ActiveSessionBar onNavigate={setActiveTab} />
+
       {/* Mobile floating bottom navigation */}
       <nav className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-2 bg-card/95 backdrop-blur-xl rounded-full border-2 border-foreground/5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50">
         {tabs.map((tab) => {
@@ -130,5 +157,6 @@ export function AppShell() {
         })}
       </nav>
     </div>
+    </ExerciseSessionProvider>
   );
 }
