@@ -1,3 +1,69 @@
+# Blood Work / Lab Results Tracking — Done (Prompt 12 Execution)
+
+## What Was Built
+
+Full blood work tracking feature: database tables, seed data with 3 historical panels, API routes, Health Coach integration, and a complete UI with marker history charts.
+
+## Files Created
+
+### Database Migrations
+- **`supabase/migrations/20260209140000_create_blood_work_tables.sql`**
+  - `blood_work_marker_presets` — Global preset markers with reference ranges (no RLS, shared across all users)
+  - `blood_work_panels` — Per-user lab panels with test_date, lab_name, notes (RLS 4-policy)
+  - `blood_work_results` — Individual marker values per panel with auto-computed flags (RLS 4-policy, CASCADE delete)
+  - Indexes on `(user_id, test_date DESC)`, `(panel_id)`, `(user_id, marker_name, created_at DESC)`
+  - Seeded **27 marker presets** across 6 categories:
+    - Lipid Panel (5): Total Cholesterol, HDL, LDL, Triglycerides, Chol/HDL Ratio
+    - Metabolic (4): Glucose (Fasting), HbA1c, Creatinine, Uric Acid
+    - Liver (5): AST (GOT), ALT (GPT), GGT, Bilirubin (Total), Alkaline Phosphatase
+    - Blood Count (5): Hemoglobin, Hematocrit, WBC, Platelets, RBC
+    - Thyroid (3): TSH, Free T4, Free T3
+    - Other (4): Vitamin D, B12, Iron, Ferritin
+
+- **`supabase/migrations/20260209140001_seed_blood_work_history.sql`**
+  - Pre-loads 3 historical panels via `DO $$` block (auto-detects first user):
+    - Panel 1 (2024-06-15): Chol 302, HDL 36, LDL 206, Trig 470, Glucose 94, AST 46, ALT 108
+    - Panel 2 (2024-12-10): Chol 302, Trig 470, Glucose 102
+    - Panel 3 (2025-06-20): Chol 366, HDL 36, LDL 189, Trig 406, Ratio 10.2, Glucose 110, AST 30, ALT 75
+  - Flags computed automatically (high/low/null)
+
+### API Routes
+- **`src/app/api/blood-work/route.ts`** — GET (list panels + results), POST (create panel + results), PATCH (update panel), DELETE (cascade results)
+- **`src/app/api/blood-work/presets/route.ts`** — GET (list all marker presets, ordered by category + sort_order)
+
+### UI Component
+- **`src/components/blood-work/blood-work-section.tsx`** — Full-featured blood work section:
+  - Panel list with flagged marker counts and tap-to-detail
+  - Latest panel summary card with Normal/Flagged counts + quick-tap flagged badges
+  - Marker history chart (recharts LineChart) with ReferenceLine for ref range boundaries
+  - Panel detail dialog with results grouped by category, color-coded status (green/orange/red)
+  - Add panel dialog with category tabs, large number inputs, marker presets with ref ranges shown
+  - Loading skeletons and empty state
+
+### Modified Files
+- **`src/components/tabs/health-tab.tsx`** — Added `<BloodWorkSection />` between Medications and Energy/Mood
+- **`src/app/api/coach/insights/route.ts`** — Added blood work insights:
+  - Fetches latest 2 panels with results
+  - Generates "blood work flags" warning for out-of-range markers
+  - Generates "improving" / "worsening" insights comparing latest vs previous panel
+
+## Health Coach Queries
+```
+GET /rest/v1/blood_work_panels?select=*,blood_work_results(*)&order=test_date.desc
+GET /rest/v1/blood_work_panels?select=*,blood_work_results(*)&order=test_date.desc&limit=1
+GET /rest/v1/blood_work_results?marker_name=eq.MARKER&select=value,unit,created_at,blood_work_panels(test_date)&order=created_at.asc
+```
+
+## Build Status
+Next.js build passes with no errors.
+
+## Action Required
+Run the two SQL migrations in Supabase SQL Editor:
+1. `20260209140000_create_blood_work_tables.sql` (tables + presets)
+2. `20260209140001_seed_blood_work_history.sql` (historical data)
+
+---
+
 # Food Catalog Database Tables — Done (Prompt 3 Execution)
 
 ## Migration Created

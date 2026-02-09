@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Moon, Pill, Zap, Plus, Check, X, Battery, Smile, Meh, Frown, Clock, AlertTriangle } from "lucide-react";
 import { NutritionSection } from "@/components/nutrition/nutrition-section";
+import { BloodWorkSection } from "@/components/blood-work/blood-work-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -718,6 +719,9 @@ export function HealthTab() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Blood Work Section */}
+      <BloodWorkSection />
 
       {/* Energy / Mood Card */}
       <div className="bg-card rounded-3xl border-2 border-foreground/5 p-6 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.05)]">

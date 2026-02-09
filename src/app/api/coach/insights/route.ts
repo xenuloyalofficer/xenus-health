@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
 
     // Fetch data for analysis
-    const [exerciseRes, sleepRes, weightRes, moodRes, medsRes, presetsRes] = await Promise.all([
+    const [exerciseRes, sleepRes, weightRes, moodRes, medsRes, presetsRes, bloodWorkRes] = await Promise.all([
       supabase
         .from("exercise_sessions")
         .select("exercise_type, started_at, duration_minutes")
@@ -62,6 +62,12 @@ export async function GET(request: NextRequest) {
         .select("medication_name")
         .eq("user_id", userId)
         .eq("active", true),
+      supabase
+        .from("blood_work_panels")
+        .select("*, blood_work_results(*)")
+        .eq("user_id", userId)
+        .order("test_date", { ascending: false })
+        .limit(2),
     ])
 
     const insights: { type: string; title: string; detail: string; value?: number }[] = []
@@ -181,6 +187,52 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Blood work insights
+    const bloodPanels = (bloodWorkRes.data || []) as { test_date: string; blood_work_results: { marker_name: string; value: number; flag: string | null; unit: string; ref_range_high: number | null }[] }[]
+    if (bloodPanels.length > 0) {
+      const latest = bloodPanels[0]
+      const flagged = latest.blood_work_results.filter((r) => r.flag)
+      if (flagged.length > 0) {
+        const markers = flagged.map((r) => `${r.marker_name}: ${r.value} ${r.unit} (${r.flag})`).join(", ")
+        insights.push({
+          type: "warning",
+          title: "Blood work flags",
+          detail: `Latest panel (${latest.test_date}): ${flagged.length} out-of-range — ${markers}`,
+          value: flagged.length,
+        })
+      }
+      // Compare trends between two most recent panels
+      if (bloodPanels.length >= 2) {
+        const prev = bloodPanels[1]
+        const improving: string[] = []
+        const worsening: string[] = []
+        for (const curr of latest.blood_work_results) {
+          const prevResult = prev.blood_work_results.find((r) => r.marker_name === curr.marker_name)
+          if (!prevResult || !curr.ref_range_high) continue
+          const currDist = Math.abs(curr.value - curr.ref_range_high)
+          const prevDist = Math.abs(prevResult.value - curr.ref_range_high)
+          if (curr.flag && !prevResult.flag) worsening.push(curr.marker_name)
+          else if (!curr.flag && prevResult.flag) improving.push(curr.marker_name)
+        }
+        if (improving.length > 0) {
+          insights.push({
+            type: "positive",
+            title: "Blood work improving",
+            detail: `Now in range: ${improving.join(", ")}`,
+            value: improving.length,
+          })
+        }
+        if (worsening.length > 0) {
+          insights.push({
+            type: "warning",
+            title: "Blood work worsening",
+            detail: `Newly out of range: ${worsening.join(", ")}`,
+            value: worsening.length,
+          })
+        }
+      }
+    }
+
     return NextResponse.json({
       insights,
       summary: {
@@ -189,6 +241,7 @@ export async function GET(request: NextRequest) {
         weight_entries_30d: weightData.length,
         mood_entries_14d: moodData.length,
         medication_entries_14d: medEntries.length,
+        blood_work_panels: bloodPanels.length,
       },
     })
   } catch (error) {
