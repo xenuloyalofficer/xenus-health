@@ -165,7 +165,46 @@ export function HomeTab({ onNavigate }: HomeTabProps) {
   const timeOfDay = getTimeOfDay()
   const checklistItems = buildChecklist(summary)
   const completionPct = computeCompletionPct(checklistItems)
-  const momentumScore = summary?.checklist?.momentum_score ?? 0
+
+  // Calculate real momentum score per Prompt 11 formula
+  const momentumScore = (() => {
+    // Step 1: Today's completion (40% weight)
+    const todayPct = completionPct
+
+    // Step 2: 7-day average (40% weight)
+    const momentumHistory = trends?.momentum || []
+    let avg7d = todayPct // fallback if no history
+    if (momentumHistory.length > 0) {
+      const last7 = momentumHistory.slice(-7)
+      avg7d = last7.reduce((sum, m) => sum + m.momentum_score, 0) / last7.length
+    }
+
+    // Step 3: Streak bonus (20% weight)
+    // Count consecutive days (backward from yesterday) where score > 40%
+    let streakDays = 0
+    if (momentumHistory.length > 0) {
+      // Sort by date descending, skip today
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const sorted = [...momentumHistory]
+        .filter((m) => m.date !== todayStr)
+        .sort((a, b) => b.date.localeCompare(a.date))
+
+      for (const m of sorted) {
+        if (m.momentum_score > 40) {
+          streakDays++
+        } else {
+          break
+        }
+      }
+    }
+    // Include today if it's above 40%
+    if (todayPct > 40) streakDays++
+    const streakBonus = Math.min(streakDays * 15, 100)
+
+    // Final score
+    const score = (todayPct * 0.4) + (avg7d * 0.4) + (streakBonus * 0.2)
+    return Math.round(Math.min(100, Math.max(0, score)))
+  })()
 
   // Determine next action based on time of day
   const nextAction = checklistItems.find((item) => {
@@ -207,7 +246,13 @@ export function HomeTab({ onNavigate }: HomeTabProps) {
             value={momentumScore}
             size={200}
             strokeWidth={16}
-            color="#DFFF00"
+            color={
+              momentumScore <= 20 ? "#9ca3af" :
+              momentumScore <= 40 ? "#ef4444" :
+              momentumScore <= 60 ? "#f97316" :
+              momentumScore <= 80 ? "#eab308" :
+              "#DFFF00"
+            }
             trackColor="rgba(0, 0, 0, 0.05)"
           >
             <div className="text-center">
