@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Home, Dumbbell, Scale, Heart, TrendingUp, Bell, User, Square } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Home, Dumbbell, Scale, Heart, TrendingUp, Bell, User, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/auth";
 import { HomeTab } from "@/components/tabs/home-tab";
 import { ExerciseTab } from "@/components/tabs/exercise-tab";
 import { BodyTab } from "@/components/tabs/body-tab";
@@ -42,6 +43,50 @@ function ActiveSessionBar({ onNavigate }: { onNavigate: (tab: TabId) => void }) 
   );
 }
 
+function UserMenu() {
+  const { user, signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+      >
+        <User className="w-5 h-5 text-primary-foreground" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-12 w-64 bg-card rounded-2xl border-2 border-foreground/5 shadow-[4px_4px_0px_0px_rgba(15,15,15,0.08)] p-3 z-50">
+          <p className="text-xs text-muted-foreground px-2 mb-1">Signed in as</p>
+          <p className="text-sm font-medium px-2 mb-3 truncate">{user?.email}</p>
+          <button
+            onClick={async () => {
+              await signOut();
+              setOpen(false);
+            }}
+            className="w-full flex items-center gap-2 px-2 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-xl transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AppShell() {
   const [activeTab, setActiveTab] = useState<TabId>("home");
 
@@ -62,9 +107,7 @@ export function AppShell() {
               <button className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors">
                 <Bell className="w-5 h-5" />
               </button>
-              <button className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="w-5 h-5 text-primary-foreground" />
-              </button>
+              <UserMenu />
             </div>
           </div>
         </div>
@@ -79,9 +122,12 @@ export function AppShell() {
             </div>
             <span className="font-bold text-lg">Health OS</span>
           </div>
-          <button className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
-            <Bell className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+              <Bell className="w-4 h-4" />
+            </button>
+            <UserMenu />
+          </div>
         </div>
       </header>
 
