@@ -318,6 +318,7 @@ export function HomeTab({ onNavigate }: HomeTabProps) {
                 label={item.label}
                 completed={item.status === "logged"}
                 skipped={false}
+                onClick={() => onNavigate(item.tab)}
                 onComplete={() => onNavigate(item.tab)}
               >
                 {item.detail && (

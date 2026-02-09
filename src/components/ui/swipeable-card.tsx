@@ -8,6 +8,7 @@ interface SwipeableCardProps {
   children: React.ReactNode;
   onComplete?: () => void;
   onSkip?: () => void;
+  onClick?: () => void;
   completed?: boolean;
   skipped?: boolean;
   className?: string;
@@ -19,6 +20,7 @@ export function SwipeableCard({
   children,
   onComplete,
   onSkip,
+  onClick,
   completed,
   skipped,
   className,
@@ -45,14 +47,17 @@ export function SwipeableCard({
   }, [isDragging]);
 
   const handleTouchEnd = useCallback(() => {
+    const wasDragged = Math.abs(dragX) > 5;
     setIsDragging(false);
     if (dragX > 60 && onComplete) {
       onComplete();
     } else if (dragX < -60 && onSkip) {
       onSkip();
+    } else if (!wasDragged && onClick) {
+      onClick();
     }
     setDragX(0);
-  }, [dragX, onComplete, onSkip]);
+  }, [dragX, onComplete, onSkip, onClick]);
 
   const status = completed ? "completed" : skipped ? "skipped" : "pending";
 
@@ -88,7 +93,8 @@ export function SwipeableCard({
       <div
         ref={cardRef}
         className={cn(
-          "relative bg-card border-2 border-foreground/5 rounded-3xl p-4 transition-transform duration-200 ease-out shadow-[3px_3px_0px_0px_rgba(15,15,15,0.05)]",
+          "relative bg-card border-2 border-foreground/5 rounded-3xl p-4 transition-transform duration-200 ease-out shadow-[3px_3px_0px_0px_rgba(15,15,15,0.05)] select-none",
+          onClick && "cursor-pointer",
           isDragging && "transition-none",
           status === "completed" && "border-green-500/30 bg-green-50/50",
           status === "skipped" && "border-gray-400/30 bg-gray-50/50 opacity-70"
