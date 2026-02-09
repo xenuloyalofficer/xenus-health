@@ -110,7 +110,7 @@ INSERT INTO blood_work_marker_presets (category, marker_name, unit, ref_range_lo
 INSERT INTO blood_work_marker_presets (category, marker_name, unit, ref_range_low, ref_range_high, sort_order) VALUES
   ('Metabolic', 'Glucose (Fasting)', 'mg/dL', 70, 100, 1),
   ('Metabolic', 'HbA1c', '%', 0, 5.7, 2),
-  ('Metabolic', 'Creatinine', 'mg/dL', 0.7, 1.3, 3),
+  ('Metabolic', 'Creatinine', 'mg/dL', 0.6, 1.1, 3),
   ('Metabolic', 'Uric Acid', 'mg/dL', 3.5, 7.2, 4);
 
 -- Liver
@@ -123,11 +123,11 @@ INSERT INTO blood_work_marker_presets (category, marker_name, unit, ref_range_lo
 
 -- Blood Count
 INSERT INTO blood_work_marker_presets (category, marker_name, unit, ref_range_low, ref_range_high, sort_order) VALUES
-  ('Blood Count', 'Hemoglobin', 'g/dL', 13.0, 17.5, 1),
-  ('Blood Count', 'Hematocrit', '%', 38.3, 48.6, 2),
+  ('Blood Count', 'Hemoglobin', 'g/dL', 12.0, 16.0, 1),
+  ('Blood Count', 'Hematocrit', '%', 36.1, 44.3, 2),
   ('Blood Count', 'White Blood Cells', 'x10³/µL', 4.5, 11.0, 3),
   ('Blood Count', 'Platelets', 'x10³/µL', 150, 400, 4),
-  ('Blood Count', 'Red Blood Cells', 'x10⁶/µL', 4.5, 5.5, 5);
+  ('Blood Count', 'Red Blood Cells', 'x10⁶/µL', 4.0, 5.0, 5);
 
 -- Thyroid
 INSERT INTO blood_work_marker_presets (category, marker_name, unit, ref_range_low, ref_range_high, sort_order) VALUES
@@ -139,5 +139,5 @@ INSERT INTO blood_work_marker_presets (category, marker_name, unit, ref_range_lo
 INSERT INTO blood_work_marker_presets (category, marker_name, unit, ref_range_low, ref_range_high, sort_order) VALUES
   ('Other', 'Vitamin D', 'ng/mL', 30, 100, 1),
   ('Other', 'Vitamin B12', 'pg/mL', 200, 900, 2),
-  ('Other', 'Iron', 'µg/dL', 65, 175, 3),
-  ('Other', 'Ferritin', 'ng/mL', 20, 250, 4);
+  ('Other', 'Iron', 'µg/dL', 50, 170, 3),
+  ('Other', 'Ferritin', 'ng/mL', 12, 150, 4);
