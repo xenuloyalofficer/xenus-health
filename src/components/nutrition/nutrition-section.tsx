@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Utensils, Search, X, Minus, Plus, Trash2 } from "lucide-react";
+import { Utensils, Search, X, Minus, Plus, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -99,6 +99,26 @@ export function NutritionSection() {
 
   // Delete state
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Custom food form state
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customPortionDefault, setCustomPortionDefault] = useState("100");
+  const [customCal, setCustomCal] = useState("");
+  const [customProtein, setCustomProtein] = useState("");
+  const [customFat, setCustomFat] = useState("");
+  const [customCarbs, setCustomCarbs] = useState("");
+  const [customFiber, setCustomFiber] = useState("");
+  const [customSugar, setCustomSugar] = useState("");
+  const [customSodium, setCustomSodium] = useState("");
+  const [customSaving, setCustomSaving] = useState(false);
+
+  // Edit nutrition state (for portion screen)
+  const [editingNutrition, setEditingNutrition] = useState(false);
+  const [editCal, setEditCal] = useState("");
+  const [editProtein, setEditProtein] = useState("");
+  const [editFat, setEditFat] = useState("");
+  const [editCarbs, setEditCarbs] = useState("");
 
   // --- Load today's data ---
   const loadTodayData = useCallback(async () => {
@@ -283,6 +303,101 @@ export function NutritionSection() {
     }
   };
 
+  // --- Custom food handlers ---
+
+  const resetCustomForm = () => {
+    setCustomName("");
+    setCustomPortionDefault("100");
+    setCustomCal("");
+    setCustomProtein("");
+    setCustomFat("");
+    setCustomCarbs("");
+    setCustomFiber("");
+    setCustomSugar("");
+    setCustomSodium("");
+    setShowCustomForm(false);
+  };
+
+  const handleSaveCustomFood = async () => {
+    if (!customName || !customCal || !customProtein || !customFat || !customCarbs) {
+      toast.error("Name, calories, protein, fat, and carbs are required");
+      return;
+    }
+    setCustomSaving(true);
+    try {
+      const per_100g = {
+        calories: parseFloat(customCal) || 0,
+        protein_g: parseFloat(customProtein) || 0,
+        fat_g: parseFloat(customFat) || 0,
+        carbs_g: parseFloat(customCarbs) || 0,
+        fiber_g: customFiber ? parseFloat(customFiber) : null,
+        sugar_g: customSugar ? parseFloat(customSugar) : null,
+        sodium_mg: customSodium ? parseFloat(customSodium) : null,
+      };
+      const defaultPortion = parseInt(customPortionDefault) || 100;
+
+      const res = await fetch("/api/nutrition/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: customName,
+          name_normalized: customName.toLowerCase().trim(),
+          source: "user",
+          default_portion_g: defaultPortion,
+          per_100g,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      const { data } = await res.json();
+
+      toast.success(`${customName} saved`);
+      medium();
+
+      // Open portion/log flow with the new food
+      const newFood: FoodSearchItem = {
+        id: data.id,
+        name: customName,
+        default_portion_g: defaultPortion,
+        per_100g,
+        source: "user",
+      };
+      setSelectedFood(newFood);
+      setPortionG(defaultPortion);
+      resetCustomForm();
+      setFoodQuery("");
+      setFoodResults(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save food");
+    } finally {
+      setCustomSaving(false);
+    }
+  };
+
+  const handleOpenEditNutrition = () => {
+    if (!selectedFood) return;
+    setEditCal(String(selectedFood.per_100g?.calories ?? ""));
+    setEditProtein(String(selectedFood.per_100g?.protein_g ?? ""));
+    setEditFat(String(selectedFood.per_100g?.fat_g ?? ""));
+    setEditCarbs(String(selectedFood.per_100g?.carbs_g ?? ""));
+    setEditingNutrition(true);
+  };
+
+  const handleSaveEditNutrition = async () => {
+    if (!selectedFood?.id) return;
+    const updatedPer100g: NutritionSnapshot = {
+      ...selectedFood.per_100g,
+      calories: parseFloat(editCal) || 0,
+      protein_g: parseFloat(editProtein) || 0,
+      fat_g: parseFloat(editFat) || 0,
+      carbs_g: parseFloat(editCarbs) || 0,
+    };
+    // Update local state immediately
+    setSelectedFood({ ...selectedFood, per_100g: updatedPer100g });
+    setEditingNutrition(false);
+    toast.success("Nutrition updated");
+    medium();
+  };
+
   // --- Computed values ---
   const totals = todayData?.totals ?? {
     total_calories: 0,
@@ -388,22 +503,31 @@ export function NutritionSection() {
       </div>
 
       {/* Search & Log */}
-      <div className="relative mb-3">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-        <Input
-          className="pl-12 h-14 rounded-xl text-base"
-          placeholder="Search foods..."
-          value={foodQuery}
-          onChange={(e) => setFoodQuery(e.target.value)}
-        />
-        {foodQuery && (
-          <button
-            onClick={() => { setFoodQuery(""); setFoodResults(null); }}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-secondary"
-          >
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
-        )}
+      <div className="flex gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Input
+            className="pl-12 h-14 rounded-xl text-base"
+            placeholder="Search foods..."
+            value={foodQuery}
+            onChange={(e) => setFoodQuery(e.target.value)}
+          />
+          {foodQuery && (
+            <button
+              onClick={() => { setFoodQuery(""); setFoodResults(null); }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-secondary"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => { setShowCustomForm(true); setFoodResults(null); setSelectedFood(null); }}
+          className="w-14 h-14 rounded-xl bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-colors shrink-0"
+          title="Create custom food"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
       </div>
 
       {foodSearching && (
@@ -472,9 +596,143 @@ export function NutritionSection() {
               ))}
             </>
           )}
+          {/* Create custom food link — always shown, prominent when no results */}
           {foodResults.personal.length === 0 && foodResults.usda.length === 0 && foodResults.openfoodfacts.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No foods found</p>
+            <p className="text-sm text-muted-foreground text-center pt-4 pb-1">No foods found</p>
           )}
+          <button
+            onClick={() => {
+              setCustomName(foodQuery);
+              setShowCustomForm(true);
+              setFoodResults(null);
+            }}
+            className="w-full text-left p-3 rounded-xl hover:bg-secondary transition-colors flex items-center gap-2 text-primary font-medium text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Create custom food{foodQuery ? ` "${foodQuery}"` : ""}
+          </button>
+        </div>
+      )}
+
+      {/* Custom Food Form */}
+      {showCustomForm && !selectedFood && (
+        <div className="bg-secondary/50 rounded-2xl p-4 space-y-3 mb-4">
+          <div className="flex items-center justify-between">
+            <p className="font-bold">Create Custom Food</p>
+            <button onClick={resetCustomForm} className="p-1.5 rounded-lg hover:bg-secondary shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium">Food Name *</Label>
+            <Input
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              placeholder="e.g., Smoked Salmon"
+              className="h-11 rounded-xl mt-1"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium">Default Portion (g)</Label>
+            <Input
+              type="number"
+              min="1"
+              value={customPortionDefault}
+              onChange={(e) => setCustomPortionDefault(e.target.value)}
+              className="h-11 rounded-xl mt-1"
+            />
+          </div>
+
+          <p className="text-xs font-bold text-muted-foreground uppercase pt-1">Nutrition per 100g</p>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs font-medium">Calories *</Label>
+              <Input
+                type="number"
+                min="0"
+                value={customCal}
+                onChange={(e) => setCustomCal(e.target.value)}
+                placeholder="kcal"
+                className="h-10 rounded-lg mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium">Protein (g) *</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={customProtein}
+                onChange={(e) => setCustomProtein(e.target.value)}
+                className="h-10 rounded-lg mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium">Fat (g) *</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={customFat}
+                onChange={(e) => setCustomFat(e.target.value)}
+                className="h-10 rounded-lg mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium">Carbs (g) *</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={customCarbs}
+                onChange={(e) => setCustomCarbs(e.target.value)}
+                className="h-10 rounded-lg mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">Fiber (g)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={customFiber}
+                onChange={(e) => setCustomFiber(e.target.value)}
+                className="h-10 rounded-lg mt-1"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground">Sugar (g)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={customSugar}
+                onChange={(e) => setCustomSugar(e.target.value)}
+                className="h-10 rounded-lg mt-1"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs font-medium text-muted-foreground">Sodium (mg)</Label>
+              <Input
+                type="number"
+                min="0"
+                value={customSodium}
+                onChange={(e) => setCustomSodium(e.target.value)}
+                className="h-10 rounded-lg mt-1"
+              />
+            </div>
+          </div>
+
+          <Button
+            onClick={handleSaveCustomFood}
+            disabled={customSaving || !customName || !customCal || !customProtein || !customFat || !customCarbs}
+            className="w-full h-12 rounded-xl font-bold"
+          >
+            {customSaving ? "Saving..." : "Save Food"}
+          </Button>
         </div>
       )}
 
@@ -547,6 +805,43 @@ export function NutritionSection() {
               <p className="text-[10px] text-muted-foreground">carbs</p>
             </div>
           </div>
+
+          {/* Edit nutrition inline */}
+          {!editingNutrition ? (
+            <button
+              onClick={handleOpenEditNutrition}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Pencil className="w-3 h-3" />
+              Edit nutrition
+            </button>
+          ) : (
+            <div className="bg-background rounded-xl p-3 space-y-2">
+              <p className="text-xs font-bold text-muted-foreground uppercase">Edit per 100g</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px]">Calories</Label>
+                  <Input type="number" min="0" value={editCal} onChange={(e) => setEditCal(e.target.value)} className="h-9 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Protein (g)</Label>
+                  <Input type="number" min="0" step="0.1" value={editProtein} onChange={(e) => setEditProtein(e.target.value)} className="h-9 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Fat (g)</Label>
+                  <Input type="number" min="0" step="0.1" value={editFat} onChange={(e) => setEditFat(e.target.value)} className="h-9 rounded-lg text-sm" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Carbs (g)</Label>
+                  <Input type="number" min="0" step="0.1" value={editCarbs} onChange={(e) => setEditCarbs(e.target.value)} className="h-9 rounded-lg text-sm" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditingNutrition(false)} className="flex-1 rounded-lg">Cancel</Button>
+                <Button size="sm" onClick={handleSaveEditNutrition} className="flex-1 rounded-lg">Apply</Button>
+              </div>
+            </div>
+          )}
 
           {/* Meal type selector */}
           <div>

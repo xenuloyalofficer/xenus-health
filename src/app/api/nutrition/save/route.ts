@@ -5,7 +5,7 @@ import { z } from "zod/v4"
 const saveSchema = z.object({
   name: z.string().min(1).max(500),
   name_normalized: z.string().min(1).max(500),
-  source: z.enum(["usda", "openfoodfacts"]),
+  source: z.enum(["user", "usda", "openfoodfacts"]),
   source_id: z.string().optional(),
   barcode: z.string().optional(),
   default_portion_g: z.number().positive().optional(),
